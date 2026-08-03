@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="VehicleConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/vehicle_config.gd" id="1_vehicle"]
+
+[resource]
+script = ExtResource("1_vehicle")
+mass = 1250.0
+engine_force = 12500.0
+maximum_speed = 28.0
+steering_angle_degrees = 32.0
+brake_force = 11500.0
+suspension_rest_length = 0.45
+suspension_stiffness = 26000.0
+suspension_damping = 2600.0
+wheel_radius = 0.34
+impact_damage_multiplier = 0.45
+maximum_health = 100.0
+rolling_drag = 0.08
+handbrake_grip = 0.35

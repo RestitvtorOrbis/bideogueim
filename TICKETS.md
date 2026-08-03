@@ -20,7 +20,7 @@ Add every future implementation ticket to this file in English. Keep each ticket
 
 ### Foundation
 
-#### [ ] T-001 — Create the Godot project shell
+#### [x] T-001 — Create the Godot project shell
 
 Create a Godot 4.7.1 project with a `Main.tscn` startup scene and a 3D Forward+ renderer configuration.
 
@@ -58,7 +58,7 @@ Add named input actions for walking, looking, entering/exiting a vehicle, accele
 - Driving and walking actions have gamepad bindings where applicable.
 - Scripts refer only to named actions, not hard-coded physical keys.
 
-#### [ ] T-005 — Add a minimal game state service
+#### [x] T-005 — Add a minimal game state service
 
 Implement an autoload named `GameState` that exposes `is_game_over`, `current_score`, `high_score`, and a `reset_run()` method.
 
@@ -70,7 +70,7 @@ Implement an autoload named `GameState` that exposes `is_game_over`, `current_sc
 
 ### Configurable Data
 
-#### [ ] T-006 — Create `GameRules` resource
+#### [x] T-006 — Create `GameRules` resource
 
 Create an editable `GameRules` resource that defines hostile score, civilian penalty, combo window, and panic threshold defaults.
 
@@ -81,7 +81,7 @@ Create an editable `GameRules` resource that defines hostile score, civilian pen
 - Default panic threshold is two group impact events within six seconds.
 - No score constants are duplicated in gameplay scripts.
 
-#### [ ] T-007 — Create `CrowdSettings` resource
+#### [x] T-007 — Create `CrowdSettings` resource
 
 Create an editable resource containing the active NPC cap, civilian target count, hostile target count, spawn distance, and full-AI distance.
 
@@ -130,7 +130,7 @@ Create a single open district scene with roads, sidewalks, building-block geomet
 - Roads and sidewalks have collision.
 - The scene contains no external commercial assets.
 
-#### [ ] T-012 — Add off-screen population spawn zones
+#### [x] T-012 — Add off-screen population spawn zones
 
 Place spawn zones around the district perimeter and tag them for civilian or hostile crowd spawning.
 
@@ -236,7 +236,7 @@ Allow the on-foot player to enter the nearest unoccupied vehicle and exit it at 
 
 ### NPCs and Crowd Simulation
 
-#### [ ] T-023 — Create the base NPC scene
+#### [x] T-023 — Create the base NPC scene
 
 Create an NPC scene with root collision, low-poly placeholder mesh, navigation agent, role marker anchor, and state-machine script.
 
@@ -264,7 +264,7 @@ Implement hostile detection of the player and an `engage` state that approaches 
 - A hostile in range can damage the player or occupied vehicle.
 - Attack rate and range are configurable.
 
-#### [ ] T-026 — Implement hostile group membership
+#### [x] T-026 — Implement hostile group membership
 
 Assign every hostile a group identifier when spawned and provide a group service that tracks recent hostile impact events.
 
@@ -273,7 +273,7 @@ Assign every hostile a group identifier when spawned and provide a group service
 - Each hostile belongs to exactly one group.
 - Group impact history expires after the configured six-second window.
 
-#### [ ] T-027 — Implement group panic
+#### [x] T-027 — Implement group panic
 
 Transition surviving members of a hostile group to `panic` after the configured number of qualifying impact events.
 
@@ -300,7 +300,7 @@ Give hostiles an armed prop, distinct outfit palette, and visible warning marker
 - The marker is visible at typical driving distance.
 - Identification does not depend on skin tone or other protected traits.
 
-#### [ ] T-030 — Implement NPC pooling
+#### [x] T-030 — Implement NPC pooling
 
 Create an NPC pool that reuses civilian and hostile instances instead of destroying and recreating them during normal population turnover.
 
@@ -330,7 +330,7 @@ Spawn and recycle NPCs from off-screen zones to maintain the configured civilian
 
 ### Impact, Score, and Effects
 
-#### [ ] T-033 — Define the impact event contract
+#### [x] T-033 — Define the impact event contract
 
 Create an `ImpactEvent` data object with NPC ID, NPC role, source, speed, impulse, and timestamp.
 
@@ -339,7 +339,7 @@ Create an `ImpactEvent` data object with NPC ID, NPC role, source, speed, impuls
 - Vehicle-to-NPC impacts emit exactly one qualifying event per NPC impact.
 - The event has no UI references.
 
-#### [ ] T-034 — Implement the score manager
+#### [x] T-034 — Implement the score manager
 
 Create an autoload `ScoreManager` that receives `ImpactEvent` objects and is the only component allowed to change score.
 
@@ -349,7 +349,7 @@ Create an autoload `ScoreManager` that receives `ImpactEvent` objects and is the
 - A civilian impact subtracts 250 points by default.
 - Score changes emit a signal containing the delta and resulting total.
 
-#### [ ] T-035 — Implement hostile-only combos
+#### [x] T-035 — Implement hostile-only combos
 
 Add a combo multiplier for qualifying hostile impacts inside the configurable combo window.
 
@@ -359,7 +359,7 @@ Add a combo multiplier for qualifying hostile impacts inside the configurable co
 - A civilian impact or expired window resets the multiplier.
 - The combo never multiplies civilian penalties.
 
-#### [ ] T-036 — Implement impact eligibility protection
+#### [x] T-036 — Implement impact eligibility protection
 
 Ensure an NPC can only score once per life cycle and is ignored after becoming `disabled`.
 
@@ -425,7 +425,7 @@ Show a pooled world-space or screen-space popup for each score change.
 - Positive and negative deltas are visually distinct.
 - Popups expire and return to their pool.
 
-#### [ ] T-043 — Persist the high score
+#### [x] T-043 — Persist the high score
 
 Save and load the high score using `user://` storage.
 
@@ -541,7 +541,7 @@ Create `tools/export.ps1` to create a Windows export in `exports/windows/` from 
 
 ### Tests and Benchmarking
 
-#### [ ] T-055 — Add a headless test runner
+#### [x] T-055 — Add a headless test runner
 
 Create a dependency-free GDScript test runner that executes registered unit tests with `--headless` and produces a machine-readable report.
 
@@ -551,7 +551,7 @@ Create a dependency-free GDScript test runner that executes registered unit test
 - Failing assertions return a non-zero exit code.
 - The report is written under `reports/`.
 
-#### [ ] T-056 — Test score rules
+#### [x] T-056 — Test score rules
 
 Write tests for hostile scoring, civilian penalty, and the rule that `ScoreManager` is the sole score mutator.
 
@@ -560,7 +560,7 @@ Write tests for hostile scoring, civilian penalty, and the rule that `ScoreManag
 - Tests verify default `+100` and `-250` outcomes.
 - Tests verify no duplicate score from a disabled NPC.
 
-#### [ ] T-057 — Test combo rules
+#### [x] T-057 — Test combo rules
 
 Write tests for combo increase, timeout reset, and civilian-impact reset.
 
@@ -569,7 +569,7 @@ Write tests for combo increase, timeout reset, and civilian-impact reset.
 - Tests cover impacts inside and outside the configured combo window.
 - Tests verify that penalties are never multiplied.
 
-#### [ ] T-058 — Test hostile panic rules
+#### [x] T-058 — Test hostile panic rules
 
 Write tests for group impact history expiry and transition to panic after two impacts in six seconds.
 
@@ -577,7 +577,7 @@ Write tests for group impact history expiry and transition to panic after two im
 
 - Tests cover threshold reached, threshold not reached, and expired impact history.
 
-#### [ ] T-059 — Test high score persistence
+#### [x] T-059 — Test high score persistence
 
 Write tests for saving, loading, and malformed high-score data handling.
 

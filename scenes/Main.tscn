@@ -1,0 +1,33 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://scenes/District.tscn" id="2_district"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/ArcadeVehicle.tscn" id="4_vehicle"]
+[ext_resource type="Script" path="res://scripts/npc/population_manager.gd" id="5_population"]
+[ext_resource type="Script" path="res://scripts/effects/impact_effects.gd" id="6_effects"]
+[ext_resource type="PackedScene" path="res://scenes/HUD.tscn" id="7_hud"]
+[ext_resource type="PackedScene" path="res://scenes/GameOverScreen.tscn" id="8_gameover"]
+[ext_resource type="PackedScene" path="res://scenes/GoreMenu.tscn" id="9_menu"]
+[ext_resource type="Script" path="res://scripts/benchmark/benchmark_scene.gd" id="10_placeholder"]
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="District" parent="." instance=ExtResource("2_district")]
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+
+[node name="ArcadeVehicle" parent="." instance=ExtResource("4_vehicle")]
+
+[node name="PopulationManager" type="Node3D" parent="."]
+script = ExtResource("5_population")
+
+[node name="ImpactEffects" type="Node3D" parent="."]
+script = ExtResource("6_effects")
+
+[node name="HUD" parent="." instance=ExtResource("7_hud")]
+
+[node name="GameOverScreen" parent="." instance=ExtResource("8_gameover")]
+
+[node name="GoreMenu" parent="." instance=ExtResource("9_menu")]

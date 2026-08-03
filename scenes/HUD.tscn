@@ -1,0 +1,64 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
+[ext_resource type="Script" path="res://scripts/ui/score_popup_pool.gd" id="2_popup"]
+
+[sub_resource type="StyleBoxFlat" id="HudPanelStyle"]
+bg_color = Color(0.02, 0.04, 0.07, 0.84)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.38, 0.5, 0.9)
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1_hud")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+offset_left = 24.0
+offset_top = 24.0
+offset_right = 294.0
+offset_bottom = 250.0
+
+[node name="Panel" type="Panel" parent="MarginContainer"]
+theme_override_styles/panel = SubResource("HudPanelStyle")
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer/Panel"]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 254.0
+offset_bottom = 210.0
+theme_override_constants/separation = 5
+
+[node name="Score" type="Label" parent="MarginContainer/Panel/VBox"]
+text = "Score: 0"
+theme_override_font_sizes/font_size = 21
+
+[node name="HighScore" type="Label" parent="MarginContainer/Panel/VBox"]
+text = "High score: 0"
+
+[node name="Combo" type="Label" parent="MarginContainer/Panel/VBox"]
+text = "Combo: x1 (0 hostile impacts)"
+
+[node name="PlayerHealth" type="Label" parent="MarginContainer/Panel/VBox"]
+text = "Player health: 100 / 100"
+
+[node name="VehicleHealth" type="Label" parent="MarginContainer/Panel/VBox"]
+text = "Vehicle health: 100 / 100"
+
+[node name="GorePreset" type="Label" parent="MarginContainer/Panel/VBox"]
+text = "Impact preset: Full"
+
+[node name="ScorePopupPool" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("2_popup")

@@ -1,0 +1,44 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/gore_menu.gd" id="1_gore"]
+
+[sub_resource type="StyleBoxFlat" id="MenuStyle"]
+bg_color = Color(0.03, 0.05, 0.09, 0.97)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.25, 0.55, 0.75, 1)
+
+[node name="GoreMenu" type="CanvasLayer"]
+script = ExtResource("1_gore")
+
+[node name="Panel" type="Panel" parent="."]
+offset_left = 460.0
+offset_top = 230.0
+offset_right = 820.0
+offset_bottom = 490.0
+theme_override_styles/panel = SubResource("MenuStyle")
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+offset_left = 32.0
+offset_top = 28.0
+offset_right = 328.0
+offset_bottom = 232.0
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Panel/VBox"]
+text = "Settings"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 26
+
+[node name="Help" type="Label" parent="Panel/VBox"]
+text = "G toggles presets • Escape pauses"
+horizontal_alignment = 1
+
+[node name="Preset" type="OptionButton" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 44)

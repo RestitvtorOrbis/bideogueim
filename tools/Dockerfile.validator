@@ -1,0 +1,16 @@
+FROM ubuntu:24.04
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y ca-certificates curl unzip libfontconfig1 libxcursor1 libxinerama1 libxrandr2 libxi6 libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl --fail --location --retry 3 --output /tmp/godot.zip \
+        "https://github.com/godotengine/godot-builds/releases/download/4.7.1-stable/Godot_v4.7.1-stable_linux.x86_64.zip" \
+    && echo "c7ff14fd28472c8d4f193043de30278dcf7e5241a1dcf7566b02e27addaa33ba  /tmp/godot.zip" | sha256sum --check --status \
+    && unzip -q /tmp/godot.zip -d /opt \
+    && mv /opt/Godot_v4.7.1-stable_linux.x86_64 /opt/godot \
+    && rm /tmp/godot.zip \
+    && chmod +x /opt/godot
+
+WORKDIR /workspace
+ENTRYPOINT ["/opt/godot"]

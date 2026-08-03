@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="GameRules" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/game_rules.gd" id="1_rules"]
+
+[resource]
+script = ExtResource("1_rules")
+hostile_score = 100
+civilian_penalty = 250
+combo_window_seconds = 6.0
+panic_threshold = 2
+panic_window_seconds = 6.0

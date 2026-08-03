@@ -1,0 +1,49 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/game_over_screen.gd" id="1_game_over"]
+
+[sub_resource type="StyleBoxFlat" id="GameOverStyle"]
+bg_color = Color(0.04, 0.025, 0.06, 0.96)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.84, 0.17, 0.16, 1)
+
+[node name="GameOverScreen" type="CanvasLayer"]
+script = ExtResource("1_game_over")
+
+[node name="Panel" type="Panel" parent="."]
+offset_left = 430.0
+offset_top = 190.0
+offset_right = 850.0
+offset_bottom = 530.0
+theme_override_styles/panel = SubResource("GameOverStyle")
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+offset_left = 38.0
+offset_top = 34.0
+offset_right = 382.0
+offset_bottom = 305.0
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Panel/VBox"]
+text = "RUN OVER"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 32
+
+[node name="FinalScore" type="Label" parent="Panel/VBox"]
+text = "Final score: 0"
+horizontal_alignment = 1
+
+[node name="HighScore" type="Label" parent="Panel/VBox"]
+text = "High score: 0"
+horizontal_alignment = 1
+
+[node name="Restart" type="Button" parent="Panel/VBox"]
+text = "Restart run"
+custom_minimum_size = Vector2(0, 48)

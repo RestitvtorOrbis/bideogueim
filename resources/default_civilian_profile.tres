@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="NpcProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/npc_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+role = 0
+maximum_health = 100.0
+walk_speed = 2.4
+material_palette = [Color(0.18, 0.45, 0.72, 1), Color(0.82, 0.45, 0.24, 1), Color(0.85, 0.75, 0.42, 1)]
+score_category = "civilian"
+warning_marker_enabled = false
+warning_marker_color = Color(0.95, 0.12, 0.08, 1)
+engagement_range = 18.0
+attack_range = 8.0
+attack_interval = 1.25
+attack_damage = 8.0

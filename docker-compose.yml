@@ -28,8 +28,8 @@ services:
       - --headless
       - --path
       - /workspace
-      - --script
-      - res://tests/test_runner.gd
+      - --scene
+      - res://tests/TestRunner.tscn
       - --
       - --report
       - res://reports/test-results.json

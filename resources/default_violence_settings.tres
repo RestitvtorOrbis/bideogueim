@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ViolenceSettings" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/violence_settings.gd" id="1_violence"]
+
+[resource]
+script = ExtResource("1_violence")
+preset = 0
+blood_particles_enabled = true
+blood_particle_density = 1.0
+decals_enabled = true
+fragments_enabled = true
+impact_camera_shake_enabled = true
+vocal_impact_audio_enabled = true

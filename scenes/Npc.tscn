@@ -1,0 +1,75 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scripts/npc/npc.gd" id="1_npc"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="2_health"]
+[ext_resource type="Resource" path="res://resources/default_civilian_profile.tres" id="3_civilian"]
+[ext_resource type="Resource" path="res://resources/default_hostile_profile.tres" id="4_hostile"]
+[ext_resource type="PackedScene" path="res://scenes/HostileProp.tscn" id="5_prop"]
+
+[sub_resource type="CapsuleShape3D" id="NpcShape"]
+radius = 0.32
+height = 1.55
+
+[sub_resource type="CapsuleMesh" id="NpcMesh"]
+radius = 0.32
+height = 1.55
+
+[sub_resource type="StandardMaterial3D" id="NpcMaterial"]
+albedo_color = Color(0.2, 0.48, 0.78, 1)
+roughness = 0.84
+
+[sub_resource type="SphereMesh" id="WarningMesh"]
+radius = 0.22
+height = 0.44
+
+[sub_resource type="StandardMaterial3D" id="WarningMaterial"]
+albedo_color = Color(1, 0.05, 0.02, 1)
+emission_enabled = true
+emission = Color(1, 0.02, 0.0, 1)
+emission_energy_multiplier = 3.0
+
+[node name="Npc" type="CharacterBody3D"]
+collision_layer = 8
+collision_mask = 5
+script = ExtResource("1_npc")
+civilian_profile = ExtResource("3_civilian")
+hostile_profile = ExtResource("4_hostile")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.78, 0)
+shape = SubResource("NpcShape")
+
+[node name="BodyMesh" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.78, 0)
+mesh = SubResource("NpcMesh")
+material_override = SubResource("NpcMaterial")
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 1.2
+target_desired_distance = 1.0
+avoidance_enabled = false
+
+[node name="RoleMarkerAnchor" type="Node3D" parent="."]
+position = Vector3(0, 2.1, 0)
+
+[node name="WarningMarker" type="Label3D" parent="RoleMarkerAnchor"]
+text = "!"
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.1, 0.04, 1)
+billboard = 1
+no_depth_test = true
+visible = false
+
+[node name="WarningIcon" type="MeshInstance3D" parent="RoleMarkerAnchor"]
+position = Vector3(0, 0.18, 0)
+mesh = SubResource("WarningMesh")
+material_override = SubResource("WarningMaterial")
+visible = false
+
+[node name="HostileProp" parent="RoleMarkerAnchor" instance=ExtResource("5_prop")]
+visible = false
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2_health")
+maximum_health = 100.0

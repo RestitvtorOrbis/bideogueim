@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="NpcProfile" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/npc_profile.gd" id="1_profile"]
+[ext_resource type="PackedScene" path="res://scenes/HostileProp.tscn" id="2_prop"]
+
+[resource]
+script = ExtResource("1_profile")
+role = 1
+maximum_health = 100.0
+walk_speed = 2.8
+material_palette = [Color(0.14, 0.16, 0.22, 1), Color(0.56, 0.08, 0.08, 1), Color(0.92, 0.22, 0.12, 1)]
+equipped_prop_scene = ExtResource("2_prop")
+score_category = "hostile"
+warning_marker_enabled = true
+warning_marker_color = Color(0.98, 0.1, 0.04, 1)
+engagement_range = 22.0
+attack_range = 9.0
+attack_interval = 1.25
+attack_damage = 8.0

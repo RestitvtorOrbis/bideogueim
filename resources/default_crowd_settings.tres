@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CrowdSettings" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/crowd_settings.gd" id="1_crowd"]
+
+[resource]
+script = ExtResource("1_crowd")
+active_npc_cap = 250
+civilian_target_count = 160
+hostile_target_count = 90
+spawn_distance = 90.0
+full_ai_distance = 35.0
+mid_ai_distance = 75.0
+mid_update_interval = 0.15
+far_update_interval = 0.5
