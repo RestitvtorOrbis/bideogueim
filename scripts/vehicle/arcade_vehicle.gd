@@ -29,11 +29,14 @@ func _ready() -> void:
 	health.health_changed.connect(_on_health_changed)
 	health.died.connect(_on_destroyed)
 	camera.current = false
-	for node in get_tree().get_nodes_in_group("vehicle_wheel_raycast"):
-		if node is RayCast3D and is_ancestor_of(node):
-			_wheel_rays.append(node)
-			node.target_position = Vector3.DOWN * (config.suspension_rest_length + config.wheel_radius)
-			node.collision_mask = 1
+	for node in find_children("*", "RayCast3D", true, false):
+		var ray := node as RayCast3D
+		if ray == null:
+			continue
+		ray.add_to_group(&"vehicle_wheel_raycast")
+		_wheel_rays.append(ray)
+		ray.target_position = Vector3.DOWN * (config.suspension_rest_length + config.wheel_radius)
+		ray.collision_mask = 1
 
 func _physics_process(_delta: float) -> void:
 	if GameState.is_game_over:

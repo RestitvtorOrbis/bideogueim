@@ -40,6 +40,12 @@ func _physics_process(delta: float) -> void:
 		velocity.y += get_gravity().y * delta
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
+	var look_input := Input.get_vector("look_left", "look_right", "look_up", "look_down")
+	if look_input != Vector2.ZERO:
+		var look_rate := 2.6 * delta
+		camera_rig.rotate_y(-look_input.x * look_rate)
+		_camera_pitch = clampf(_camera_pitch - look_input.y * look_rate, -1.05, 0.75)
+		camera_rig.rotation.x = _camera_pitch
 
 	var input_vector := Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 	var basis := camera_rig.global_transform.basis

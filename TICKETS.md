@@ -90,7 +90,7 @@ Create an editable resource containing the active NPC cap, civilian target count
 - Defaults are 250 total NPCs, 160 civilians, and 90 hostiles.
 - All values can be changed in the Inspector.
 
-#### [ ] T-008 — Create `VehicleConfig` resource
+#### [x] T-008 — Create `VehicleConfig` resource
 
 Create an editable resource for mass, engine force, steering angle, brake force, suspension values, maximum health, and impact damage multiplier.
 
@@ -99,7 +99,7 @@ Create an editable resource for mass, engine force, steering angle, brake force,
 - The vehicle controller reads all listed tuning values from this resource.
 - The resource has usable defaults for an arcade driving prototype.
 
-#### [ ] T-009 — Create `ViolenceSettings` resource
+#### [x] T-009 — Create `ViolenceSettings` resource
 
 Create an editable resource with three presets: `Full`, `Reduced`, and `Disabled`.
 
@@ -108,7 +108,7 @@ Create an editable resource with three presets: `Full`, `Reduced`, and `Disabled
 - Each preset controls blood particles, decals, comic fragments, impact camera shake, and vocal impact audio.
 - `Disabled` spawns no blood or body-fragment visuals.
 
-#### [ ] T-010 — Create `NpcProfile` resource
+#### [x] T-010 — Create `NpcProfile` resource
 
 Create a resource that defines NPC role, health, walk speed, material palette, equipped prop scene, and score category.
 
@@ -120,7 +120,7 @@ Create a resource that defines NPC role, health, walk speed, material palette, e
 
 ### World and Player
 
-#### [ ] T-011 — Build a compact playable district
+#### [x] T-011 — Build a compact playable district
 
 Create a single open district scene with roads, sidewalks, building-block geometry, directional lighting, a ground plane, and a player spawn location.
 
@@ -139,7 +139,7 @@ Place spawn zones around the district perimeter and tag them for civilian or hos
 - Spawn zones are outside the initial camera view.
 - At least four zones exist for each role.
 
-#### [ ] T-013 — Implement the on-foot player controller
+#### [x] T-013 — Implement the on-foot player controller
 
 Create a `CharacterBody3D` controller with walk, sprint, gravity, jump, and mouse/gamepad camera look.
 
@@ -149,7 +149,7 @@ Create a `CharacterBody3D` controller with walk, sprint, gravity, jump, and mous
 - Camera pitch is clamped to prevent a full vertical flip.
 - Input is disabled after game over.
 
-#### [ ] T-014 — Add third-person follow camera
+#### [x] T-014 — Add third-person follow camera
 
 Implement a collision-aware third-person camera for the on-foot player.
 
@@ -158,7 +158,7 @@ Implement a collision-aware third-person camera for the on-foot player.
 - The camera follows the player smoothly.
 - World geometry does not fully obscure the player for more than one frame.
 
-#### [ ] T-015 — Create the player health component
+#### [x] T-015 — Create the player health component
 
 Implement a reusable health component for the player with damage, death signal, and reset behavior.
 
@@ -170,7 +170,7 @@ Implement a reusable health component for the player with damage, death signal, 
 
 ### Vehicle
 
-#### [ ] T-016 — Create the arcade vehicle body
+#### [x] T-016 — Create the arcade vehicle body
 
 Create a vehicle scene based on `RigidBody3D` with a placeholder body mesh, collision shape, and four wheel attachment points.
 
@@ -179,7 +179,7 @@ Create a vehicle scene based on `RigidBody3D` with a placeholder body mesh, coll
 - The vehicle rests stably on a flat surface.
 - Its collision body has no visible jitter at rest.
 
-#### [ ] T-017 — Implement raycast suspension
+#### [x] T-017 — Implement raycast suspension
 
 Add one raycast-based suspension solver per wheel attachment point.
 
@@ -197,7 +197,7 @@ Implement acceleration, reverse, steering, braking, drag, and handbrake using `V
 - The vehicle accelerates, stops, reverses, and turns with keyboard and gamepad.
 - The vehicle cannot accelerate indefinitely past its configured maximum speed.
 
-#### [ ] T-019 — Add vehicle health and destruction
+#### [x] T-019 — Add vehicle health and destruction
 
 Give the vehicle configurable health and damage from collisions and hostile attacks.
 
@@ -206,7 +206,7 @@ Give the vehicle configurable health and damage from collisions and hostile atta
 - Vehicle health is exposed through a signal or readable property.
 - Destroying the vehicle ends the current run.
 
-#### [ ] T-020 — Add vehicle reset action
+#### [x] T-020 — Add vehicle reset action
 
 Implement a reset action that places the vehicle upright on the nearest valid road position.
 
@@ -215,7 +215,7 @@ Implement a reset action that places the vehicle upright on the nearest valid ro
 - Reset works when the vehicle is upside down.
 - Reset does not move the vehicle outside the district.
 
-#### [ ] T-021 — Implement vehicle camera mode
+#### [x] T-021 — Implement vehicle camera mode
 
 Create a third-person vehicle camera with speed-sensitive following distance and collision handling.
 
@@ -224,7 +224,7 @@ Create a third-person vehicle camera with speed-sensitive following distance and
 - Entering a vehicle switches to this camera.
 - Exiting restores the on-foot camera.
 
-#### [ ] T-022 — Implement entering and exiting the vehicle
+#### [x] T-022 — Implement entering and exiting the vehicle
 
 Allow the on-foot player to enter the nearest unoccupied vehicle and exit it at a valid side position.
 
@@ -245,7 +245,7 @@ Create an NPC scene with root collision, low-poly placeholder mesh, navigation a
 - One civilian and one hostile profile can be assigned in the Inspector.
 - The scene can be instantiated without runtime errors.
 
-#### [ ] T-024 — Implement NPC wandering
+#### [x] T-024 — Implement NPC wandering
 
 Implement a low-cost wandering state that selects valid nearby navigation targets.
 
@@ -254,7 +254,7 @@ Implement a low-cost wandering state that selects valid nearby navigation target
 - NPCs move on the navigation area without repeatedly selecting invalid targets.
 - An NPC changes target after reaching its current target.
 
-#### [ ] T-025 — Implement hostile engagement
+#### [x] T-025 — Implement hostile engagement
 
 Implement hostile detection of the player and an `engage` state that approaches the player and applies periodic damage at range.
 
@@ -282,7 +282,7 @@ Transition surviving members of a hostile group to `panic` after the configured 
 - Default behavior triggers after two impacts in six seconds.
 - Civilians do not use hostile group panic.
 
-#### [ ] T-028 — Implement hostile fleeing
+#### [x] T-028 — Implement hostile fleeing
 
 Implement `flee` behavior that moves panicked hostiles away from the player and avoids re-entering engagement while panic is active.
 
@@ -291,7 +291,7 @@ Implement `flee` behavior that moves panicked hostiles away from the player and 
 - A panicked hostile visibly increases distance from the player.
 - A fleeing hostile does not deal attack damage.
 
-#### [ ] T-029 — Add clear hostile identification
+#### [x] T-029 — Add clear hostile identification
 
 Give hostiles an armed prop, distinct outfit palette, and visible warning marker.
 
@@ -318,7 +318,7 @@ Update near NPCs every frame, mid-range NPCs on a staggered interval, and far NP
 - Full AI distance is configurable through `CrowdSettings`.
 - Far NPCs do not run hostile attack checks.
 
-#### [ ] T-032 — Implement continuous population management
+#### [x] T-032 — Implement continuous population management
 
 Spawn and recycle NPCs from off-screen zones to maintain the configured civilian and hostile targets.
 
@@ -368,7 +368,7 @@ Ensure an NPC can only score once per life cycle and is ignored after becoming `
 - Repeated collision frames do not award repeated points.
 - Reused pooled NPCs become score-eligible only after full reset.
 
-#### [ ] T-037 — Add comic impact particles
+#### [x] T-037 — Add comic impact particles
 
 Create pooled particle effects for high-speed impacts, controlled by `ViolenceSettings`.
 
@@ -378,7 +378,7 @@ Create pooled particle effects for high-speed impacts, controlled by `ViolenceSe
 - `Reduced` shows a lower-density effect.
 - `Disabled` shows no gore particles.
 
-#### [ ] T-038 — Add comic decals and fragments
+#### [x] T-038 — Add comic decals and fragments
 
 Create pooled ground decals and exaggerated comic fragments for impact effects.
 
@@ -387,7 +387,7 @@ Create pooled ground decals and exaggerated comic fragments for impact effects.
 - Effects respect the selected gore preset.
 - Active decals and fragments have hard pool limits.
 
-#### [ ] T-039 — Add impact audio
+#### [x] T-039 — Add impact audio
 
 Add pooled placeholder CC0 impact and vocal reaction audio with distance attenuation.
 
@@ -396,7 +396,7 @@ Add pooled placeholder CC0 impact and vocal reaction audio with distance attenua
 - Audio is not played when the preset is `Disabled`.
 - The asset manifest records every included audio asset.
 
-#### [ ] T-040 — Add impact camera shake
+#### [x] T-040 — Add impact camera shake
 
 Apply speed-scaled camera shake on qualifying vehicle impacts.
 
@@ -407,7 +407,7 @@ Apply speed-scaled camera shake on qualifying vehicle impacts.
 
 ### UI, Persistence, and Game Flow
 
-#### [ ] T-041 — Create the gameplay HUD
+#### [x] T-041 — Create the gameplay HUD
 
 Create a HUD showing score, high score, combo, player health, vehicle health, and the active gore preset.
 
@@ -416,7 +416,7 @@ Create a HUD showing score, high score, combo, player health, vehicle health, an
 - HUD updates from service signals rather than polling scene nodes.
 - Civilian penalties are visually distinct from positive score changes.
 
-#### [ ] T-042 — Add score feedback popups
+#### [x] T-042 — Add score feedback popups
 
 Show a pooled world-space or screen-space popup for each score change.
 
@@ -434,7 +434,7 @@ Save and load the high score using `user://` storage.
 - A new high score persists after restarting the game.
 - Missing or malformed save data safely falls back to zero.
 
-#### [ ] T-044 — Implement the game-over screen
+#### [x] T-044 — Implement the game-over screen
 
 Show a game-over screen when the player or vehicle reaches zero health.
 
@@ -444,7 +444,7 @@ Show a game-over screen when the player or vehicle reaches zero health.
 - The screen shows final score and high score.
 - Restart creates a fresh world population and resets the run score and combo.
 
-#### [ ] T-045 — Add gore preset controls
+#### [x] T-045 — Add gore preset controls
 
 Expose the three gore presets through a pause/settings menu and the configured toggle action.
 

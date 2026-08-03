@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/district.gd" id="1_district"]
 
@@ -78,6 +78,10 @@ ambient_light_source = 3
 ambient_light_color = Color(0.42, 0.5, 0.65, 1)
 ambient_light_energy = 0.8
 tonemap_mode = 2
+
+[sub_resource type="NavigationMesh" id="NavigationMesh"]
+vertices = PackedVector3Array(-80, 0.25, -80, 80, 0.25, -80, 80, 0.25, 80, -80, 0.25, 80)
+polygons = [PackedInt32Array(0, 1, 2, 3)]
 
 [node name="District" type="Node3D"]
 script = ExtResource("1_district")
@@ -223,6 +227,7 @@ shape = SubResource("BuildingShapeA")
 
 [node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
 navigation_layers = 1
+navigation_mesh = SubResource("NavigationMesh")
 
 [node name="PlayerSpawn" type="Marker3D" parent="."]
 position = Vector3(0, 1.2, 6)
