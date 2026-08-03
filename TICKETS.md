@@ -188,7 +188,7 @@ Add one raycast-based suspension solver per wheel attachment point.
 - The vehicle remains driveable over small curbs.
 - Suspension force is applied only while a wheel ray hits the ground.
 
-#### [ ] T-018 — Implement arcade steering and propulsion
+#### [x] T-018 — Implement arcade steering and propulsion
 
 Implement acceleration, reverse, steering, braking, drag, and handbrake using `VehicleConfig` values.
 
@@ -309,7 +309,7 @@ Create an NPC pool that reuses civilian and hostile instances instead of destroy
 - Returning an NPC clears state, velocity, navigation target, group membership, and visual effects.
 - Population management does not call `queue_free()` during ordinary despawn/reuse.
 
-#### [ ] T-031 — Implement distance-based NPC updates
+#### [x] T-031 — Implement distance-based NPC updates
 
 Update near NPCs every frame, mid-range NPCs on a staggered interval, and far NPCs with simplified movement.
 

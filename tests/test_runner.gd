@@ -18,6 +18,8 @@ func _run() -> void:
 	var results: Array[Dictionary] = []
 	for suite in suites:
 		results.append_array(suite.run())
+	var physics_suite := preload("res://tests/test_vehicle_physics.gd").new()
+	results.append_array(await physics_suite.run())
 	var failures := results.filter(func(result: Dictionary) -> bool: return not bool(result.get("passed", false)))
 	var report := {
 		"passed": failures.is_empty(),
