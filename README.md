@@ -43,7 +43,7 @@ When Godot 4.7.1 is installed:
 
 ~~~powershell
 godot --headless --path . --editor --import --quit
-godot --headless --path . --script res://tests/test_runner.gd -- --report res://reports/test-results.json
+godot --headless --path . --scene res://tests/TestRunner.tscn -- --report res://reports/test-results.json
 ~~~
 
 Docker Desktop provides the pinned headless environment:

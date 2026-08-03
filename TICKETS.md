@@ -483,7 +483,7 @@ Create `README.md` with Windows editor setup, Godot version, controls, project l
 
 ### Docker and Automation
 
-#### [ ] T-049 — Create the Godot tools Dockerfile
+#### [x] T-049 — Create the Godot tools Dockerfile
 
 Create a Dockerfile that pins Godot 4.7.1 headless with export templates and runs as a non-root user.
 
@@ -503,7 +503,7 @@ Create Compose configuration for headless tooling with dropped capabilities, `no
 - Normal test/export services use `network_mode: none`.
 - The configuration does not use privileged mode.
 
-#### [ ] T-051 — Add Docker build script
+#### [x] T-051 — Add Docker build script
 
 Create `tools/build.ps1` to build the pinned tools image.
 
@@ -512,7 +512,7 @@ Create `tools/build.ps1` to build the pinned tools image.
 - The script fails clearly when Docker Desktop is unavailable.
 - The script contains no administrator-elevation command.
 
-#### [ ] T-052 — Add Docker test script
+#### [x] T-052 — Add Docker test script
 
 Create `tools/test.ps1` to run the test suite inside the isolated container.
 
@@ -521,7 +521,7 @@ Create `tools/test.ps1` to run the test suite inside the isolated container.
 - The command uses the Compose test service.
 - A failing test returns a non-zero PowerShell exit code.
 
-#### [ ] T-053 — Add Docker benchmark script
+#### [x] T-053 — Add Docker benchmark script
 
 Create `tools/benchmark.ps1` to run the crowd benchmark scene in the isolated container and save a report.
 
@@ -530,7 +530,7 @@ Create `tools/benchmark.ps1` to run the crowd benchmark scene in the isolated co
 - The report is written under `reports/`.
 - The command returns non-zero when the configured performance threshold fails.
 
-#### [ ] T-054 — Add Docker export script
+#### [x] T-054 — Add Docker export script
 
 Create `tools/export.ps1` to create a Windows export in `exports/windows/` from the isolated container.
 
