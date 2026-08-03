@@ -1,0 +1,146 @@
+; Urban Drive Prototype
+; Godot 4.7.1, Forward+
+
+config_version=5
+
+[application]
+
+config/name="Urban Drive Prototype"
+run/main_scene="res://scenes/Main.tscn"
+config/features=PackedStringArray("4.7", "Forward Plus")
+
+[autoload]
+
+GameState="*res://scripts/services/game_state.gd"
+ImpactBus="*res://scripts/services/impact_bus.gd"
+ScoreManager="*res://scripts/services/score_manager.gd"
+HostileGroupService="*res://scripts/services/hostile_group_service.gd"
+SettingsService="*res://scripts/services/settings_service.gd"
+CameraShake="*res://scripts/services/camera_shake.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+
+[input]
+
+move_forward={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":87), Object(InputEventJoypadMotion,"axis":1,"axis_value":-1.0)]
+}
+move_backward={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":83), Object(InputEventJoypadMotion,"axis":1,"axis_value":1.0)]
+}
+move_left={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":65), Object(InputEventJoypadMotion,"axis":0,"axis_value":-1.0)]
+}
+move_right={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":68), Object(InputEventJoypadMotion,"axis":0,"axis_value":1.0)]
+}
+look_up={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194320), Object(InputEventJoypadMotion,"axis":3,"axis_value":-1.0)]
+}
+look_down={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194322), Object(InputEventJoypadMotion,"axis":3,"axis_value":1.0)]
+}
+look_left={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194319), Object(InputEventJoypadMotion,"axis":2,"axis_value":-1.0)]
+}
+look_right={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194321), Object(InputEventJoypadMotion,"axis":2,"axis_value":1.0)]
+}
+sprint={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194325), Object(InputEventJoypadButton,"button_index":10)]
+}
+jump={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":32), Object(InputEventJoypadButton,"button_index":0)]
+}
+interact_vehicle={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":69), Object(InputEventJoypadButton,"button_index":2)]
+}
+accelerate={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":87), Object(InputEventJoypadMotion,"axis":5,"axis_value":1.0), Object(InputEventJoypadButton,"button_index":0)]
+}
+brake_reverse={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":83), Object(InputEventJoypadMotion,"axis":4,"axis_value":1.0), Object(InputEventJoypadButton,"button_index":1)]
+}
+steer_left={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":65), Object(InputEventJoypadMotion,"axis":0,"axis_value":-1.0)]
+}
+steer_right={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":68), Object(InputEventJoypadMotion,"axis":0,"axis_value":1.0)]
+}
+handbrake={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":32), Object(InputEventJoypadButton,"button_index":4)]
+}
+reset_vehicle={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":82), Object(InputEventJoypadButton,"button_index":3)]
+}
+toggle_gore_preset={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":71), Object(InputEventJoypadButton,"button_index":9)]
+}
+pause={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194305), Object(InputEventKey,"physical_keycode":80), Object(InputEventJoypadButton,"button_index":6)]
+}
+
+[layer_names]
+
+3d_physics/layer_1="World"
+3d_physics/layer_2="Player"
+3d_physics/layer_3="Vehicle"
+3d_physics/layer_4="NPC"
+
+[physics]
+
+3d/default_gravity=18.0
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
+renderer/rendering_method.mobile="forward_plus"
+textures/default_filters/use_nearest_mipmap_filter=false
+environment/defaults/default_clear_color=Color(0.035, 0.055, 0.085, 1)
+
+[export]
+
+presets/last_export_path="exports/windows/UrbanDrivePrototype.exe"
+
+[preset.0]
+
+name="Windows Desktop"
+platform="Windows Desktop"
+runnable=true
+dedicated_server=false
+custom_features="4.7"
+binary_format/architecture="x86_64"
+texture_format/bptc=true
+texture_format/s3tc=true
+texture_format/etc2=false
+texture_format/no_bptc_fallbacks=true
+
+[preset.0.options]
+
+binary_format/embed_pck=true
+debug/export_console_script=1

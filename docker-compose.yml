@@ -1,0 +1,64 @@
+services:
+  godot-tools:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GODOT_VERSION: "4.7.1"
+        GODOT_RELEASE: "stable"
+    image: urban-drive-tools:4.7.1
+    working_dir: /workspace
+    user: godot
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    cpus: "2.0"
+    network_mode: none
+    volumes:
+      - .:/workspace
+      - godot_import_cache:/workspace/.godot
+      - ./exports:/workspace/exports
+
+  test:
+    extends:
+      service: godot-tools
+    command:
+      - --headless
+      - --path
+      - /workspace
+      - --script
+      - res://tests/test_runner.gd
+      - --
+      - --report
+      - res://reports/test-results.json
+
+  benchmark:
+    extends:
+      service: godot-tools
+    command:
+      - --headless
+      - --path
+      - /workspace
+      - --scene
+      - res://scenes/CrowdBenchmark.tscn
+      - --
+      - --benchmark-seconds
+      - "600"
+      - --report
+      - res://reports/benchmark.json
+
+  export-windows:
+    extends:
+      service: godot-tools
+    command:
+      - --headless
+      - --path
+      - /workspace
+      - --export-release
+      - Windows Desktop
+      - /workspace/exports/windows/UrbanDrivePrototype.exe
+
+volumes:
+  godot_import_cache:

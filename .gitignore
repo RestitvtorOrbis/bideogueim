@@ -1,0 +1,22 @@
+# Godot generated data
+.godot/
+.import/
+*.import
+
+# Build and test output
+exports/
+reports/
+
+# Docker caches
+.docker-cache/
+.docker/
+
+# Local editor data
+.vscode/
+.idea/
+*.tmp
+*.bak
+
+# OS metadata
+Thumbs.db
+.DS_Store

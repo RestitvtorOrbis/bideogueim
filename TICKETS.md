@@ -20,7 +20,7 @@ Add every future implementation ticket to this file in English. Keep each ticket
 
 ### Foundation
 
-#### T-001 — Create the Godot project shell
+#### [ ] T-001 — Create the Godot project shell
 
 Create a Godot 4.7.1 project with a `Main.tscn` startup scene and a 3D Forward+ renderer configuration.
 
@@ -30,7 +30,7 @@ Create a Godot 4.7.1 project with a `Main.tscn` startup scene and a 3D Forward+ 
 - Running the project opens `Main.tscn` without errors.
 - The project window is titled `Urban Drive Prototype`.
 
-#### T-002 — Create the source directory convention
+#### [x] T-002 — Create the source directory convention
 
 Create the directories `scenes`, `scripts`, `resources`, `assets`, `tests`, `tools`, and `docs`, each with an English `.gitkeep` or README where otherwise empty.
 
@@ -39,7 +39,7 @@ Create the directories `scenes`, `scripts`, `resources`, `assets`, `tests`, `too
 - Every directory exists in version control.
 - No gameplay script is stored at the repository root.
 
-#### T-003 — Add repository ignore rules
+#### [x] T-003 — Add repository ignore rules
 
 Add a `.gitignore` for Godot imports, local editor data, export outputs, test reports, and Docker caches.
 
@@ -48,7 +48,7 @@ Add a `.gitignore` for Godot imports, local editor data, export outputs, test re
 - `.godot/`, `.import/`, `exports/`, `reports/`, and `.docker-cache/` are ignored.
 - Project source, scenes, resources, tests, and Docker configuration are not ignored.
 
-#### T-004 — Define project input actions
+#### [x] T-004 — Define project input actions
 
 Add named input actions for walking, looking, entering/exiting a vehicle, accelerating, braking/reversing, steering, handbrake, resetting the vehicle, and toggling the gore preset.
 
@@ -58,7 +58,7 @@ Add named input actions for walking, looking, entering/exiting a vehicle, accele
 - Driving and walking actions have gamepad bindings where applicable.
 - Scripts refer only to named actions, not hard-coded physical keys.
 
-#### T-005 — Add a minimal game state service
+#### [ ] T-005 — Add a minimal game state service
 
 Implement an autoload named `GameState` that exposes `is_game_over`, `current_score`, `high_score`, and a `reset_run()` method.
 
@@ -70,7 +70,7 @@ Implement an autoload named `GameState` that exposes `is_game_over`, `current_sc
 
 ### Configurable Data
 
-#### T-006 — Create `GameRules` resource
+#### [ ] T-006 — Create `GameRules` resource
 
 Create an editable `GameRules` resource that defines hostile score, civilian penalty, combo window, and panic threshold defaults.
 
@@ -81,7 +81,7 @@ Create an editable `GameRules` resource that defines hostile score, civilian pen
 - Default panic threshold is two group impact events within six seconds.
 - No score constants are duplicated in gameplay scripts.
 
-#### T-007 — Create `CrowdSettings` resource
+#### [ ] T-007 — Create `CrowdSettings` resource
 
 Create an editable resource containing the active NPC cap, civilian target count, hostile target count, spawn distance, and full-AI distance.
 
@@ -90,7 +90,7 @@ Create an editable resource containing the active NPC cap, civilian target count
 - Defaults are 250 total NPCs, 160 civilians, and 90 hostiles.
 - All values can be changed in the Inspector.
 
-#### T-008 — Create `VehicleConfig` resource
+#### [ ] T-008 — Create `VehicleConfig` resource
 
 Create an editable resource for mass, engine force, steering angle, brake force, suspension values, maximum health, and impact damage multiplier.
 
@@ -99,7 +99,7 @@ Create an editable resource for mass, engine force, steering angle, brake force,
 - The vehicle controller reads all listed tuning values from this resource.
 - The resource has usable defaults for an arcade driving prototype.
 
-#### T-009 — Create `ViolenceSettings` resource
+#### [ ] T-009 — Create `ViolenceSettings` resource
 
 Create an editable resource with three presets: `Full`, `Reduced`, and `Disabled`.
 
@@ -108,7 +108,7 @@ Create an editable resource with three presets: `Full`, `Reduced`, and `Disabled
 - Each preset controls blood particles, decals, comic fragments, impact camera shake, and vocal impact audio.
 - `Disabled` spawns no blood or body-fragment visuals.
 
-#### T-010 — Create `NpcProfile` resource
+#### [ ] T-010 — Create `NpcProfile` resource
 
 Create a resource that defines NPC role, health, walk speed, material palette, equipped prop scene, and score category.
 
@@ -120,7 +120,7 @@ Create a resource that defines NPC role, health, walk speed, material palette, e
 
 ### World and Player
 
-#### T-011 — Build a compact playable district
+#### [ ] T-011 — Build a compact playable district
 
 Create a single open district scene with roads, sidewalks, building-block geometry, directional lighting, a ground plane, and a player spawn location.
 
@@ -130,7 +130,7 @@ Create a single open district scene with roads, sidewalks, building-block geomet
 - Roads and sidewalks have collision.
 - The scene contains no external commercial assets.
 
-#### T-012 — Add off-screen population spawn zones
+#### [ ] T-012 — Add off-screen population spawn zones
 
 Place spawn zones around the district perimeter and tag them for civilian or hostile crowd spawning.
 
@@ -139,7 +139,7 @@ Place spawn zones around the district perimeter and tag them for civilian or hos
 - Spawn zones are outside the initial camera view.
 - At least four zones exist for each role.
 
-#### T-013 — Implement the on-foot player controller
+#### [ ] T-013 — Implement the on-foot player controller
 
 Create a `CharacterBody3D` controller with walk, sprint, gravity, jump, and mouse/gamepad camera look.
 
@@ -149,7 +149,7 @@ Create a `CharacterBody3D` controller with walk, sprint, gravity, jump, and mous
 - Camera pitch is clamped to prevent a full vertical flip.
 - Input is disabled after game over.
 
-#### T-014 — Add third-person follow camera
+#### [ ] T-014 — Add third-person follow camera
 
 Implement a collision-aware third-person camera for the on-foot player.
 
@@ -158,7 +158,7 @@ Implement a collision-aware third-person camera for the on-foot player.
 - The camera follows the player smoothly.
 - World geometry does not fully obscure the player for more than one frame.
 
-#### T-015 — Create the player health component
+#### [ ] T-015 — Create the player health component
 
 Implement a reusable health component for the player with damage, death signal, and reset behavior.
 
@@ -170,7 +170,7 @@ Implement a reusable health component for the player with damage, death signal, 
 
 ### Vehicle
 
-#### T-016 — Create the arcade vehicle body
+#### [ ] T-016 — Create the arcade vehicle body
 
 Create a vehicle scene based on `RigidBody3D` with a placeholder body mesh, collision shape, and four wheel attachment points.
 
@@ -179,7 +179,7 @@ Create a vehicle scene based on `RigidBody3D` with a placeholder body mesh, coll
 - The vehicle rests stably on a flat surface.
 - Its collision body has no visible jitter at rest.
 
-#### T-017 — Implement raycast suspension
+#### [ ] T-017 — Implement raycast suspension
 
 Add one raycast-based suspension solver per wheel attachment point.
 
@@ -188,7 +188,7 @@ Add one raycast-based suspension solver per wheel attachment point.
 - The vehicle remains driveable over small curbs.
 - Suspension force is applied only while a wheel ray hits the ground.
 
-#### T-018 — Implement arcade steering and propulsion
+#### [ ] T-018 — Implement arcade steering and propulsion
 
 Implement acceleration, reverse, steering, braking, drag, and handbrake using `VehicleConfig` values.
 
@@ -197,7 +197,7 @@ Implement acceleration, reverse, steering, braking, drag, and handbrake using `V
 - The vehicle accelerates, stops, reverses, and turns with keyboard and gamepad.
 - The vehicle cannot accelerate indefinitely past its configured maximum speed.
 
-#### T-019 — Add vehicle health and destruction
+#### [ ] T-019 — Add vehicle health and destruction
 
 Give the vehicle configurable health and damage from collisions and hostile attacks.
 
@@ -206,7 +206,7 @@ Give the vehicle configurable health and damage from collisions and hostile atta
 - Vehicle health is exposed through a signal or readable property.
 - Destroying the vehicle ends the current run.
 
-#### T-020 — Add vehicle reset action
+#### [ ] T-020 — Add vehicle reset action
 
 Implement a reset action that places the vehicle upright on the nearest valid road position.
 
@@ -215,7 +215,7 @@ Implement a reset action that places the vehicle upright on the nearest valid ro
 - Reset works when the vehicle is upside down.
 - Reset does not move the vehicle outside the district.
 
-#### T-021 — Implement vehicle camera mode
+#### [ ] T-021 — Implement vehicle camera mode
 
 Create a third-person vehicle camera with speed-sensitive following distance and collision handling.
 
@@ -224,7 +224,7 @@ Create a third-person vehicle camera with speed-sensitive following distance and
 - Entering a vehicle switches to this camera.
 - Exiting restores the on-foot camera.
 
-#### T-022 — Implement entering and exiting the vehicle
+#### [ ] T-022 — Implement entering and exiting the vehicle
 
 Allow the on-foot player to enter the nearest unoccupied vehicle and exit it at a valid side position.
 
@@ -236,7 +236,7 @@ Allow the on-foot player to enter the nearest unoccupied vehicle and exit it at 
 
 ### NPCs and Crowd Simulation
 
-#### T-023 — Create the base NPC scene
+#### [ ] T-023 — Create the base NPC scene
 
 Create an NPC scene with root collision, low-poly placeholder mesh, navigation agent, role marker anchor, and state-machine script.
 
@@ -245,7 +245,7 @@ Create an NPC scene with root collision, low-poly placeholder mesh, navigation a
 - One civilian and one hostile profile can be assigned in the Inspector.
 - The scene can be instantiated without runtime errors.
 
-#### T-024 — Implement NPC wandering
+#### [ ] T-024 — Implement NPC wandering
 
 Implement a low-cost wandering state that selects valid nearby navigation targets.
 
@@ -254,7 +254,7 @@ Implement a low-cost wandering state that selects valid nearby navigation target
 - NPCs move on the navigation area without repeatedly selecting invalid targets.
 - An NPC changes target after reaching its current target.
 
-#### T-025 — Implement hostile engagement
+#### [ ] T-025 — Implement hostile engagement
 
 Implement hostile detection of the player and an `engage` state that approaches the player and applies periodic damage at range.
 
@@ -264,7 +264,7 @@ Implement hostile detection of the player and an `engage` state that approaches 
 - A hostile in range can damage the player or occupied vehicle.
 - Attack rate and range are configurable.
 
-#### T-026 — Implement hostile group membership
+#### [ ] T-026 — Implement hostile group membership
 
 Assign every hostile a group identifier when spawned and provide a group service that tracks recent hostile impact events.
 
@@ -273,7 +273,7 @@ Assign every hostile a group identifier when spawned and provide a group service
 - Each hostile belongs to exactly one group.
 - Group impact history expires after the configured six-second window.
 
-#### T-027 — Implement group panic
+#### [ ] T-027 — Implement group panic
 
 Transition surviving members of a hostile group to `panic` after the configured number of qualifying impact events.
 
@@ -282,7 +282,7 @@ Transition surviving members of a hostile group to `panic` after the configured 
 - Default behavior triggers after two impacts in six seconds.
 - Civilians do not use hostile group panic.
 
-#### T-028 — Implement hostile fleeing
+#### [ ] T-028 — Implement hostile fleeing
 
 Implement `flee` behavior that moves panicked hostiles away from the player and avoids re-entering engagement while panic is active.
 
@@ -291,7 +291,7 @@ Implement `flee` behavior that moves panicked hostiles away from the player and 
 - A panicked hostile visibly increases distance from the player.
 - A fleeing hostile does not deal attack damage.
 
-#### T-029 — Add clear hostile identification
+#### [ ] T-029 — Add clear hostile identification
 
 Give hostiles an armed prop, distinct outfit palette, and visible warning marker.
 
@@ -300,7 +300,7 @@ Give hostiles an armed prop, distinct outfit palette, and visible warning marker
 - The marker is visible at typical driving distance.
 - Identification does not depend on skin tone or other protected traits.
 
-#### T-030 — Implement NPC pooling
+#### [ ] T-030 — Implement NPC pooling
 
 Create an NPC pool that reuses civilian and hostile instances instead of destroying and recreating them during normal population turnover.
 
@@ -309,7 +309,7 @@ Create an NPC pool that reuses civilian and hostile instances instead of destroy
 - Returning an NPC clears state, velocity, navigation target, group membership, and visual effects.
 - Population management does not call `queue_free()` during ordinary despawn/reuse.
 
-#### T-031 — Implement distance-based NPC updates
+#### [ ] T-031 — Implement distance-based NPC updates
 
 Update near NPCs every frame, mid-range NPCs on a staggered interval, and far NPCs with simplified movement.
 
@@ -318,7 +318,7 @@ Update near NPCs every frame, mid-range NPCs on a staggered interval, and far NP
 - Full AI distance is configurable through `CrowdSettings`.
 - Far NPCs do not run hostile attack checks.
 
-#### T-032 — Implement continuous population management
+#### [ ] T-032 — Implement continuous population management
 
 Spawn and recycle NPCs from off-screen zones to maintain the configured civilian and hostile targets.
 
@@ -330,7 +330,7 @@ Spawn and recycle NPCs from off-screen zones to maintain the configured civilian
 
 ### Impact, Score, and Effects
 
-#### T-033 — Define the impact event contract
+#### [ ] T-033 — Define the impact event contract
 
 Create an `ImpactEvent` data object with NPC ID, NPC role, source, speed, impulse, and timestamp.
 
@@ -339,7 +339,7 @@ Create an `ImpactEvent` data object with NPC ID, NPC role, source, speed, impuls
 - Vehicle-to-NPC impacts emit exactly one qualifying event per NPC impact.
 - The event has no UI references.
 
-#### T-034 — Implement the score manager
+#### [ ] T-034 — Implement the score manager
 
 Create an autoload `ScoreManager` that receives `ImpactEvent` objects and is the only component allowed to change score.
 
@@ -349,7 +349,7 @@ Create an autoload `ScoreManager` that receives `ImpactEvent` objects and is the
 - A civilian impact subtracts 250 points by default.
 - Score changes emit a signal containing the delta and resulting total.
 
-#### T-035 — Implement hostile-only combos
+#### [ ] T-035 — Implement hostile-only combos
 
 Add a combo multiplier for qualifying hostile impacts inside the configurable combo window.
 
@@ -359,7 +359,7 @@ Add a combo multiplier for qualifying hostile impacts inside the configurable co
 - A civilian impact or expired window resets the multiplier.
 - The combo never multiplies civilian penalties.
 
-#### T-036 — Implement impact eligibility protection
+#### [ ] T-036 — Implement impact eligibility protection
 
 Ensure an NPC can only score once per life cycle and is ignored after becoming `disabled`.
 
@@ -368,7 +368,7 @@ Ensure an NPC can only score once per life cycle and is ignored after becoming `
 - Repeated collision frames do not award repeated points.
 - Reused pooled NPCs become score-eligible only after full reset.
 
-#### T-037 — Add comic impact particles
+#### [ ] T-037 — Add comic impact particles
 
 Create pooled particle effects for high-speed impacts, controlled by `ViolenceSettings`.
 
@@ -378,7 +378,7 @@ Create pooled particle effects for high-speed impacts, controlled by `ViolenceSe
 - `Reduced` shows a lower-density effect.
 - `Disabled` shows no gore particles.
 
-#### T-038 — Add comic decals and fragments
+#### [ ] T-038 — Add comic decals and fragments
 
 Create pooled ground decals and exaggerated comic fragments for impact effects.
 
@@ -387,7 +387,7 @@ Create pooled ground decals and exaggerated comic fragments for impact effects.
 - Effects respect the selected gore preset.
 - Active decals and fragments have hard pool limits.
 
-#### T-039 — Add impact audio
+#### [ ] T-039 — Add impact audio
 
 Add pooled placeholder CC0 impact and vocal reaction audio with distance attenuation.
 
@@ -396,7 +396,7 @@ Add pooled placeholder CC0 impact and vocal reaction audio with distance attenua
 - Audio is not played when the preset is `Disabled`.
 - The asset manifest records every included audio asset.
 
-#### T-040 — Add impact camera shake
+#### [ ] T-040 — Add impact camera shake
 
 Apply speed-scaled camera shake on qualifying vehicle impacts.
 
@@ -407,7 +407,7 @@ Apply speed-scaled camera shake on qualifying vehicle impacts.
 
 ### UI, Persistence, and Game Flow
 
-#### T-041 — Create the gameplay HUD
+#### [ ] T-041 — Create the gameplay HUD
 
 Create a HUD showing score, high score, combo, player health, vehicle health, and the active gore preset.
 
@@ -416,7 +416,7 @@ Create a HUD showing score, high score, combo, player health, vehicle health, an
 - HUD updates from service signals rather than polling scene nodes.
 - Civilian penalties are visually distinct from positive score changes.
 
-#### T-042 — Add score feedback popups
+#### [ ] T-042 — Add score feedback popups
 
 Show a pooled world-space or screen-space popup for each score change.
 
@@ -425,7 +425,7 @@ Show a pooled world-space or screen-space popup for each score change.
 - Positive and negative deltas are visually distinct.
 - Popups expire and return to their pool.
 
-#### T-043 — Persist the high score
+#### [ ] T-043 — Persist the high score
 
 Save and load the high score using `user://` storage.
 
@@ -434,7 +434,7 @@ Save and load the high score using `user://` storage.
 - A new high score persists after restarting the game.
 - Missing or malformed save data safely falls back to zero.
 
-#### T-044 — Implement the game-over screen
+#### [ ] T-044 — Implement the game-over screen
 
 Show a game-over screen when the player or vehicle reaches zero health.
 
@@ -444,7 +444,7 @@ Show a game-over screen when the player or vehicle reaches zero health.
 - The screen shows final score and high score.
 - Restart creates a fresh world population and resets the run score and combo.
 
-#### T-045 — Add gore preset controls
+#### [ ] T-045 — Add gore preset controls
 
 Expose the three gore presets through a pause/settings menu and the configured toggle action.
 
@@ -455,7 +455,7 @@ Expose the three gore presets through a pause/settings menu and the configured t
 
 ### Assets and Documentation
 
-#### T-046 — Add asset manifest
+#### [x] T-046 — Add asset manifest
 
 Create `ASSET_MANIFEST.md` documenting every non-original asset with name, source URL, author, license, modification notes, and local path.
 
@@ -464,7 +464,7 @@ Create `ASSET_MANIFEST.md` documenting every non-original asset with name, sourc
 - All externally sourced assets are documented.
 - The file states that only CC0 assets are allowed in this prototype.
 
-#### T-047 — Add placeholder asset attribution
+#### [x] T-047 — Add placeholder asset attribution
 
 Document all project-created placeholder meshes, materials, particles, and sounds as original temporary assets.
 
@@ -472,7 +472,7 @@ Document all project-created placeholder meshes, materials, particles, and sound
 
 - Every placeholder asset used by the project is traceable in the manifest.
 
-#### T-048 — Write the local development README
+#### [x] T-048 — Write the local development README
 
 Create `README.md` with Windows editor setup, Godot version, controls, project layout, and test commands.
 
@@ -483,7 +483,7 @@ Create `README.md` with Windows editor setup, Godot version, controls, project l
 
 ### Docker and Automation
 
-#### T-049 — Create the Godot tools Dockerfile
+#### [ ] T-049 — Create the Godot tools Dockerfile
 
 Create a Dockerfile that pins Godot 4.7.1 headless with export templates and runs as a non-root user.
 
@@ -493,7 +493,7 @@ Create a Dockerfile that pins Godot 4.7.1 headless with export templates and run
 - The container user is not root.
 - The Godot version is asserted by the image build or entrypoint.
 
-#### T-050 — Create isolated Docker Compose configuration
+#### [x] T-050 — Create isolated Docker Compose configuration
 
 Create Compose configuration for headless tooling with dropped capabilities, `no-new-privileges`, resource limits, named caches, and no runtime network.
 
@@ -503,7 +503,7 @@ Create Compose configuration for headless tooling with dropped capabilities, `no
 - Normal test/export services use `network_mode: none`.
 - The configuration does not use privileged mode.
 
-#### T-051 — Add Docker build script
+#### [ ] T-051 — Add Docker build script
 
 Create `tools/build.ps1` to build the pinned tools image.
 
@@ -512,7 +512,7 @@ Create `tools/build.ps1` to build the pinned tools image.
 - The script fails clearly when Docker Desktop is unavailable.
 - The script contains no administrator-elevation command.
 
-#### T-052 — Add Docker test script
+#### [ ] T-052 — Add Docker test script
 
 Create `tools/test.ps1` to run the test suite inside the isolated container.
 
@@ -521,7 +521,7 @@ Create `tools/test.ps1` to run the test suite inside the isolated container.
 - The command uses the Compose test service.
 - A failing test returns a non-zero PowerShell exit code.
 
-#### T-053 — Add Docker benchmark script
+#### [ ] T-053 — Add Docker benchmark script
 
 Create `tools/benchmark.ps1` to run the crowd benchmark scene in the isolated container and save a report.
 
@@ -530,7 +530,7 @@ Create `tools/benchmark.ps1` to run the crowd benchmark scene in the isolated co
 - The report is written under `reports/`.
 - The command returns non-zero when the configured performance threshold fails.
 
-#### T-054 — Add Docker export script
+#### [ ] T-054 — Add Docker export script
 
 Create `tools/export.ps1` to create a Windows export in `exports/windows/` from the isolated container.
 
@@ -541,7 +541,7 @@ Create `tools/export.ps1` to create a Windows export in `exports/windows/` from 
 
 ### Tests and Benchmarking
 
-#### T-055 — Add a headless test runner
+#### [ ] T-055 — Add a headless test runner
 
 Create a dependency-free GDScript test runner that executes registered unit tests with `--headless` and produces a machine-readable report.
 
@@ -551,7 +551,7 @@ Create a dependency-free GDScript test runner that executes registered unit test
 - Failing assertions return a non-zero exit code.
 - The report is written under `reports/`.
 
-#### T-056 — Test score rules
+#### [ ] T-056 — Test score rules
 
 Write tests for hostile scoring, civilian penalty, and the rule that `ScoreManager` is the sole score mutator.
 
@@ -560,7 +560,7 @@ Write tests for hostile scoring, civilian penalty, and the rule that `ScoreManag
 - Tests verify default `+100` and `-250` outcomes.
 - Tests verify no duplicate score from a disabled NPC.
 
-#### T-057 — Test combo rules
+#### [ ] T-057 — Test combo rules
 
 Write tests for combo increase, timeout reset, and civilian-impact reset.
 
@@ -569,7 +569,7 @@ Write tests for combo increase, timeout reset, and civilian-impact reset.
 - Tests cover impacts inside and outside the configured combo window.
 - Tests verify that penalties are never multiplied.
 
-#### T-058 — Test hostile panic rules
+#### [ ] T-058 — Test hostile panic rules
 
 Write tests for group impact history expiry and transition to panic after two impacts in six seconds.
 
@@ -577,7 +577,7 @@ Write tests for group impact history expiry and transition to panic after two im
 
 - Tests cover threshold reached, threshold not reached, and expired impact history.
 
-#### T-059 — Test high score persistence
+#### [ ] T-059 — Test high score persistence
 
 Write tests for saving, loading, and malformed high-score data handling.
 
@@ -586,7 +586,7 @@ Write tests for saving, loading, and malformed high-score data handling.
 - Valid data is restored.
 - Malformed data results in a safe zero value.
 
-#### T-060 — Create the 250-NPC benchmark scene
+#### [ ] T-060 — Create the 250-NPC benchmark scene
 
 Create a headless benchmark scene that maintains 250 NPCs for ten minutes and records frame time, average FPS, peak memory, and pool allocations.
 
