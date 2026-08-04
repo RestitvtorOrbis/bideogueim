@@ -1,5 +1,7 @@
 extends RefCounted
 
+var _npc_damage_events: int = 0
+
 func run() -> Array[Dictionary]:
 	var results: Array[Dictionary] = []
 	_test_resources(results)
@@ -138,11 +140,15 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 	var hostile_group := HostileGroupService.create_group()
 	var hostile: Node = preload("res://scenes/Npc.tscn").instantiate()
 	tree.root.add_child(hostile)
-	hostile.call("activate", hostile_profile, Vector3(0.0, 1.2, 4.0), "contract-hostile", hostile_group, target)
+	var target_health := target.get_node("HealthComponent") as HealthComponent
+	_npc_damage_events = 0
+	if target_health != null:
+		target_health.damaged.connect(_on_npc_damage)
+	hostile.call("activate", hostile_profile, Vector3(0.0, 1.2, 1.5), "contract-hostile", hostile_group, target)
 	hostile.call("tick", 0.1, true)
 	_expect(results, "hostile enters engage state near player", int(hostile.get("state")) == 2)
-	var target_health := target.get_node("HealthComponent") as HealthComponent
 	_expect(results, "hostile engagement damages the player", target_health != null and target_health.current_health < target_health.maximum_health)
+	_expect(results, "hostile engagement applies exactly one damage event", _npc_damage_events == 1)
 	var panic_distance_before: float = hostile.global_position.distance_to(target.global_position)
 	HostileGroupService.record_impact(hostile_group, 0.0)
 	HostileGroupService.record_impact(hostile_group, 1.0)
@@ -160,6 +166,9 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 	hostile.queue_free()
 	civilian.queue_free()
 	target.queue_free()
+
+func _on_npc_damage(_amount: float, _current: float) -> void:
+	_npc_damage_events += 1
 
 func _test_effects_and_ui(results: Array[Dictionary]) -> void:
 	var tree := Engine.get_main_loop() as SceneTree

@@ -8,14 +8,18 @@ extends CharacterBody3D
 @onready var health: HealthComponent = $HealthComponent
 @onready var camera_rig: Node3D = $CameraRig
 @onready var camera: Camera3D = $CameraRig/SpringArm3D/Camera3D
+@onready var visual_root := get_node_or_null("VisualRoot") as Node3D
 
 var occupied_vehicle: Node
-var _camera_pitch: float = -0.18
+var _camera_pitch: float = -0.20
+var _visual_visible_before_vehicle: bool = true
 
 func _ready() -> void:
 	add_to_group("player")
 	health.configure(100.0)
 	health.died.connect(_on_died)
+	if visual_root != null:
+		_visual_visible_before_vehicle = visual_root.visible
 	_configure_camera_rig()
 	camera.current = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -31,7 +35,7 @@ func _configure_camera_rig() -> void:
 		camera_rig.call("set_world_space_follow", true)
 	else:
 		camera_rig.top_level = true
-		camera_rig.global_position = global_position + Vector3.UP * 1.25
+		camera_rig.global_position = global_position + Vector3.UP * 1.70
 	camera_rig.global_rotation = Vector3(_camera_pitch, camera_yaw, 0.0)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -102,9 +106,16 @@ func apply_damage(amount: float) -> void:
 		health.apply_damage(amount)
 
 func set_occupied_vehicle(vehicle: Node) -> void:
-	occupied_vehicle = vehicle
 	var is_occupied := vehicle != null
-	visible = not is_occupied
+	var was_occupied := occupied_vehicle != null
+	if is_occupied and not was_occupied and visual_root != null:
+		_visual_visible_before_vehicle = visual_root.visible
+	occupied_vehicle = vehicle
+	if visual_root != null:
+		if is_occupied:
+			visual_root.visible = false
+		elif was_occupied:
+			visual_root.visible = _visual_visible_before_vehicle
 	collision_layer = 0 if is_occupied else 2
 	collision_mask = 0 if is_occupied else 1
 	set_physics_process(not is_occupied)

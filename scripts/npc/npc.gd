@@ -24,6 +24,8 @@ var _wander_time_left: float = 0.0
 var _attack_cooldown: float = 0.0
 var _panic_time_left: float = 0.0
 var _disabled_time: float = 0.0
+var _run_grace_active: bool = false
+var _safe_radius: float = 0.0
 var _rng := RandomNumberGenerator.new()
 var _visual_profile: NpcProfile
 var _visual_material: StandardMaterial3D
@@ -54,6 +56,8 @@ func activate(
 	target_player = player
 	active = true
 	impact_eligible = true
+	_run_grace_active = false
+	_safe_radius = 0.0
 	state = State.WANDER
 	_disabled_time = 0.0
 	_attack_cooldown = 0.0
@@ -93,6 +97,8 @@ func deactivate() -> void:
 	_attack_cooldown = 0.0
 	_panic_time_left = 0.0
 	_disabled_time = 0.0
+	_run_grace_active = false
+	_safe_radius = 0.0
 	visible = false
 	collision_layer = 0
 	collision_mask = 0
@@ -107,6 +113,9 @@ func tick(delta: float, full_ai: bool) -> void:
 		return
 	if state == State.PANIC or state == State.FLEE:
 		_tick_flee(delta)
+		return
+	if _is_hostile_grace_active():
+		_tick_grace(delta)
 		return
 	if not full_ai:
 		_tick_far_movement(delta)
@@ -132,6 +141,10 @@ func _tick_far_movement(delta: float) -> void:
 	_move_toward(_wander_target, delta, speed)
 
 func _tick_engage(delta: float) -> void:
+	if _is_hostile_grace_active():
+		state = State.WANDER
+		_tick_grace(delta)
+		return
 	if target_player == null:
 		state = State.WANDER
 		return
@@ -175,15 +188,22 @@ func _move_toward(destination: Vector3, delta: float, speed: float) -> void:
 	velocity.x = move_toward(velocity.x, direction.x * speed, 10.0 * delta)
 	velocity.z = move_toward(velocity.z, direction.z * speed, 10.0 * delta)
 	move_and_slide()
+	_enforce_safe_radius()
 
 func _select_wander_target() -> void:
 	var center := global_position
 	if target_player != null:
 		center = target_player.global_position
 	var angle := _rng.randf_range(0.0, TAU)
-	var radius := _rng.randf_range(5.0, 22.0)
+	var minimum_radius := 5.0
+	var maximum_radius := 22.0
+	if _is_hostile_grace_active():
+		minimum_radius = _safe_radius
+		maximum_radius = maxf(minimum_radius, minimum_radius + 22.0)
+	var radius := _rng.randf_range(minimum_radius, maximum_radius)
 	_wander_target = center + Vector3(cos(angle), 0.0, sin(angle)) * radius
 	_wander_target.y = global_position.y
+	_wander_target = _clamp_wander_target_to_safe_radius(_wander_target)
 	_wander_time_left = _rng.randf_range(3.0, 8.0)
 	if navigation_agent != null:
 		navigation_agent.target_position = _wander_target
@@ -193,7 +213,88 @@ func _can_engage() -> bool:
 		return false
 	if target_player == null:
 		return false
+	if _is_hostile_grace_active():
+		return false
 	return global_position.distance_to(target_player.global_position) <= profile.engagement_range
+
+func configure_run_safety(grace_active: bool, safe_radius: float) -> void:
+	var was_grace_active := _run_grace_active
+	_run_grace_active = grace_active
+	_safe_radius = maxf(0.0, safe_radius)
+	if not active or profile == null or not profile.is_hostile() or not _run_grace_active:
+		return
+	if state == State.ENGAGE:
+		state = State.WANDER
+	if not was_grace_active or not _is_wander_target_safe():
+		_select_wander_target()
+
+func _is_hostile_grace_active() -> bool:
+	return _run_grace_active and profile != null and profile.is_hostile() and target_player != null
+
+func _tick_grace(delta: float) -> void:
+	if not _is_hostile_grace_active():
+		return
+	if _is_inside_safe_radius():
+		var escape_target := _safe_radius_escape_target()
+		_move_toward(escape_target, delta, profile.walk_speed if profile != null else 2.4)
+		return
+	if _wander_time_left <= 0.0 or not _is_wander_target_safe():
+		_select_wander_target()
+	_move_toward(_wander_target, delta, profile.walk_speed if profile != null else 2.4)
+
+func _is_inside_safe_radius() -> bool:
+	if not _is_hostile_grace_active() or _safe_radius <= 0.0:
+		return false
+	var player_node := target_player as Node3D
+	if player_node == null:
+		return false
+	var offset := global_position - player_node.global_position
+	offset.y = 0.0
+	return offset.length_squared() < _safe_radius * _safe_radius
+
+func _safe_radius_escape_target() -> Vector3:
+	var player_node := target_player as Node3D
+	if player_node == null:
+		return global_position
+	var offset := global_position - player_node.global_position
+	offset.y = 0.0
+	var direction := Vector3.FORWARD if offset.length_squared() < 0.0001 else offset.normalized()
+	var target := player_node.global_position + direction * maxf(_safe_radius, 0.1)
+	target.y = global_position.y
+	return target
+
+func _is_wander_target_safe() -> bool:
+	if not _is_hostile_grace_active() or _safe_radius <= 0.0:
+		return true
+	var player_node := target_player as Node3D
+	if player_node == null:
+		return true
+	var offset := _wander_target - player_node.global_position
+	offset.y = 0.0
+	return offset.length_squared() + 0.0001 >= _safe_radius * _safe_radius
+
+func _clamp_wander_target_to_safe_radius(target: Vector3) -> Vector3:
+	if not _is_hostile_grace_active() or _safe_radius <= 0.0:
+		return target
+	var player_node := target_player as Node3D
+	if player_node == null:
+		return target
+	var offset := target - player_node.global_position
+	offset.y = 0.0
+	if offset.length_squared() >= _safe_radius * _safe_radius:
+		return target
+	var direction := Vector3.FORWARD if offset.length_squared() < 0.0001 else offset.normalized()
+	var clamped_target := player_node.global_position + direction * _safe_radius
+	clamped_target.y = target.y
+	return clamped_target
+
+func _enforce_safe_radius() -> void:
+	if not _is_inside_safe_radius():
+		return
+	var target := _safe_radius_escape_target()
+	global_position = target
+	velocity.x = 0.0
+	velocity.z = 0.0
 
 func enter_panic() -> void:
 	if not active or profile == null or not profile.is_hostile() or state == State.DISABLED:

@@ -11,6 +11,9 @@ func run() -> Array[Dictionary]:
 	_test_camera_relative_axes(results)
 	_test_yaw_alignment(results)
 	_test_input_mappings(results)
+	_test_on_foot_camera_contract(results)
+	_test_visual_root_hysteresis(results)
+	_test_vehicle_camera_transition(results)
 	_test_runtime_camera_decoupling(results)
 	return results
 
@@ -38,6 +41,85 @@ func _test_input_mappings(results: Array[Dictionary]) -> void:
 	_expect(results, "S is bound to backward", _has_physical_key("move_backward", 83))
 	_expect(results, "A is bound to left", _has_physical_key("move_left", 65))
 	_expect(results, "D is bound to right", _has_physical_key("move_right", 68))
+
+func _test_on_foot_camera_contract(results: Array[Dictionary]) -> void:
+	var player := preload("res://scenes/Player.tscn").instantiate() as CharacterBody3D
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		_expect(results, "camera contract fixture has a scene tree", false)
+		return
+	tree.root.add_child(player)
+	var camera_rig := player.get_node("CameraRig") as Node3D
+	var spring_arm := player.get_node("CameraRig/SpringArm3D") as SpringArm3D
+	var camera := player.get_node("CameraRig/SpringArm3D/Camera3D") as Camera3D
+	_expect(results, "on-foot camera follow height is 1.70", is_equal_approx(float(camera_rig.get("follow_height")), 1.70))
+	_expect(results, "on-foot camera shoulder offset is 0.75", is_equal_approx(spring_arm.position.x, 0.75))
+	_expect(results, "on-foot camera spring length is 6.5", is_equal_approx(spring_arm.spring_length, 6.5))
+	_expect(results, "on-foot camera starts at -0.20 pitch", is_equal_approx(camera_rig.rotation.x, -0.20))
+	_expect(results, "on-foot camera FOV is 72", is_equal_approx(camera.fov, 72.0))
+	_expect(results, "on-foot camera collision is world-only", spring_arm.collision_mask == 1)
+	_expect(results, "player primitives are under VisualRoot", player.get_node_or_null("VisualRoot/BodyMesh") != null and player.get_node_or_null("VisualRoot/Head/Visor") != null)
+	_expect(results, "player root remains visible", player.visible)
+	player.queue_free()
+
+func _test_visual_root_hysteresis(results: Array[Dictionary]) -> void:
+	var player := preload("res://scenes/Player.tscn").instantiate() as CharacterBody3D
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		_expect(results, "visual hysteresis fixture has a scene tree", false)
+		return
+	tree.root.add_child(player)
+	var visual_root := player.get_node("VisualRoot") as Node3D
+	var camera_rig := player.get_node("CameraRig") as Node3D
+	var update_visibility := func(distance: float) -> void:
+		camera_rig.call("_update_visual_visibility_for_distance", distance)
+	update_visibility.call(1.65)
+	_expect(results, "visual remains visible at show threshold", visual_root.visible)
+	update_visibility.call(1.34)
+	_expect(results, "visual hides below hide threshold", not visual_root.visible)
+	update_visibility.call(1.35)
+	_expect(results, "visual stays hidden at hide threshold", not visual_root.visible)
+	update_visibility.call(1.64)
+	_expect(results, "visual stays hidden inside hysteresis band", not visual_root.visible)
+	update_visibility.call(1.65)
+	_expect(results, "visual stays hidden at show threshold", not visual_root.visible)
+	update_visibility.call(1.66)
+	_expect(results, "visual reappears above show threshold", visual_root.visible)
+	player.queue_free()
+
+func _test_vehicle_camera_transition(results: Array[Dictionary]) -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		_expect(results, "vehicle transition fixture has a scene tree", false)
+		return
+	var game_state := tree.root.get_node_or_null("GameState")
+	if game_state != null and game_state.has_method("reset_run"):
+		game_state.call("reset_run")
+	var player := preload("res://scenes/Player.tscn").instantiate() as CharacterBody3D
+	var vehicle := preload("res://scenes/ArcadeVehicle.tscn").instantiate() as Node3D
+	tree.root.add_child(player)
+	tree.root.add_child(vehicle)
+	var visual_root := player.get_node("VisualRoot") as Node3D
+	var on_foot_camera := player.get_node("CameraRig/SpringArm3D/Camera3D") as Camera3D
+	var vehicle_camera := vehicle.get_node("CameraRig/SpringArm3D/Camera3D") as Camera3D
+	player.set("global_position", Vector3(0.0, 1.25, 0.0))
+	vehicle.set("global_position", Vector3(0.0, 1.25, 0.0))
+	var entered := bool(vehicle.call("try_enter", player))
+	_expect(results, "vehicle entry hides only VisualRoot", entered and not visual_root.visible and player.visible)
+	_expect(results, "vehicle entry activates vehicle camera", vehicle_camera.current and not on_foot_camera.current)
+	var exited := bool(vehicle.call("exit_vehicle"))
+	_expect(results, "vehicle exit restores VisualRoot", exited and visual_root.visible)
+	_expect(results, "vehicle exit restores on-foot camera", on_foot_camera.current and not vehicle_camera.current)
+
+	var camera_rig := player.get_node("CameraRig") as Node3D
+	camera_rig.call("_update_visual_visibility_for_distance", 1.0)
+	_expect(results, "close-camera state is hidden before driving", not visual_root.visible)
+	player.global_position = vehicle.global_position
+	var close_entered := bool(vehicle.call("try_enter", player))
+	var close_exited := bool(vehicle.call("exit_vehicle"))
+	_expect(results, "close-camera state survives driving transition", close_entered and close_exited and not visual_root.visible)
+	player.queue_free()
+	vehicle.queue_free()
 
 func _test_runtime_camera_decoupling(results: Array[Dictionary]) -> void:
 	var tree := Engine.get_main_loop() as SceneTree

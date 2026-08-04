@@ -86,72 +86,76 @@ script = ExtResource("1_player")
 position = Vector3(0, 0.9, 0)
 shape = SubResource("PlayerShape")
 
-[node name="BodyMesh" type="MeshInstance3D" parent="."]
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="BodyMesh" type="MeshInstance3D" parent="VisualRoot"]
 position = Vector3(0, 0.9, 0)
 mesh = SubResource("PlayerMesh")
 material_override = SubResource("PlayerMaterial")
 
-[node name="Head" type="MeshInstance3D" parent="."]
+[node name="Head" type="MeshInstance3D" parent="VisualRoot"]
 position = Vector3(0, 1.95, 0)
 mesh = SubResource("HeadMesh")
 
-[node name="Visor" type="MeshInstance3D" parent="Head"]
+[node name="Visor" type="MeshInstance3D" parent="VisualRoot/Head"]
 position = Vector3(0, 0.02, -0.25)
 mesh = SubResource("VisorMesh")
 material_override = SubResource("VisorMaterial")
 
-[node name="Neck" type="MeshInstance3D" parent="."]
+[node name="Neck" type="MeshInstance3D" parent="VisualRoot"]
 position = Vector3(0, 1.58, 0)
 mesh = SubResource("NeckMesh")
 material_override = SubResource("ArmorMaterial")
 
-[node name="TorsoArmor" type="MeshInstance3D" parent="."]
+[node name="TorsoArmor" type="MeshInstance3D" parent="VisualRoot"]
 position = Vector3(0, 1.08, -0.04)
 mesh = SubResource("ChestMesh")
 material_override = SubResource("ArmorMaterial")
 
-[node name="ShoulderLeft" type="MeshInstance3D" parent="."]
+[node name="ShoulderLeft" type="MeshInstance3D" parent="VisualRoot"]
 position = Vector3(-0.45, 1.38, 0)
 mesh = SubResource("ShoulderMesh")
 material_override = SubResource("ArmorMaterial")
 
-[node name="ShoulderRight" type="MeshInstance3D" parent="."]
+[node name="ShoulderRight" type="MeshInstance3D" parent="VisualRoot"]
 position = Vector3(0.45, 1.38, 0)
 mesh = SubResource("ShoulderMesh")
 material_override = SubResource("ArmorMaterial")
 
-[node name="BootLeft" type="MeshInstance3D" parent="."]
+[node name="BootLeft" type="MeshInstance3D" parent="VisualRoot"]
 position = Vector3(-0.2, 0.13, -0.05)
 mesh = SubResource("BootMesh")
 material_override = SubResource("BootMaterial")
 
-[node name="BootRight" type="MeshInstance3D" parent="."]
+[node name="BootRight" type="MeshInstance3D" parent="VisualRoot"]
 position = Vector3(0.2, 0.13, -0.05)
 mesh = SubResource("BootMesh")
 material_override = SubResource("BootMaterial")
 
-[node name="ChestCore" type="MeshInstance3D" parent="."]
+[node name="ChestCore" type="MeshInstance3D" parent="VisualRoot"]
 position = Vector3(0, 1.13, -0.295)
 mesh = SubResource("CoreMesh")
 material_override = SubResource("AccentMaterial")
 
 [node name="CameraRig" type="Node3D" parent="."]
-position = Vector3(0, 1.45, 0)
+position = Vector3(0, 1.7, 0)
+rotation = Vector3(-0.2, 0, 0)
 top_level = true
 script = ExtResource("2_camera")
 
 [node name="SpringArm3D" type="SpringArm3D" parent="CameraRig"]
-spring_length = 6.0
+position = Vector3(0.75, 0, 0)
+spring_length = 6.5
 margin = 0.25
 collision_mask = 1
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig/SpringArm3D"]
 current = true
-fov = 68.0
+fov = 72.0
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("3_health")
 maximum_health = 100.0
 
-[node name="VisualDirector" type="Node3D" parent="."]
+[node name="VisualDirector" type="Node3D" parent="VisualRoot"]
 script = ExtResource("4_visual")

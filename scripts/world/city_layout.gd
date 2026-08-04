@@ -93,8 +93,7 @@ static func generate(
 					})
 
 	var player_spawn := Vector3(0.0, 1.25, 0.0)
-	var vehicle_road_index := center_index + 1
-	var vehicle_spawn := Vector3(0.0, 1.25, road_centers[vehicle_road_index])
+	var vehicle_spawn := player_spawn + Vector3.FORWARD * 3.25
 	var civilian_spawns := _make_spawns(rng, road_centers, half_extent, civilian_count, 0)
 	var hostile_spawns := _make_spawns(rng, road_centers, half_extent, hostile_count, 1)
 

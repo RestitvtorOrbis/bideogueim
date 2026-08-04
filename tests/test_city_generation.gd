@@ -22,6 +22,13 @@ func _run() -> void:
 	_expect("hostile spawns are distributed", district_a.get_spawn_points("hostile").size() >= 24)
 	_expect("player spawn is available", district_a.get_player_spawn_position().y > 0.0)
 	_expect("vehicle spawn is available", district_a.get_vehicle_spawn_position().y > 0.0)
+	var player_spawn_a: Vector3 = district_a.get_player_spawn_position()
+	var vehicle_spawn_a: Vector3 = district_a.get_vehicle_spawn_position()
+	var player_spawn_b: Vector3 = district_b.get_player_spawn_position()
+	var vehicle_spawn_b: Vector3 = district_b.get_vehicle_spawn_position()
+	_expect("vehicle spawn is exactly 3.25 m forward", vehicle_spawn_a - player_spawn_a == Vector3.FORWARD * 3.25)
+	_expect("default spawn positions are exact", player_spawn_a == Vector3(0.0, 1.25, 0.0) and vehicle_spawn_a == Vector3(0.0, 1.25, -3.25))
+	_expect("spawn positions are deterministic", player_spawn_a == player_spawn_b and vehicle_spawn_a == vehicle_spawn_b)
 	_expect("ground collision is generated", district_a.get_node_or_null("Ground/CollisionShape3D") != null)
 	_expect("horizontal road collision is generated", district_a.get_node_or_null("Roads/RoadX/CollisionShape3D") != null)
 	_expect("vertical road contract is preserved", district_a.get_node_or_null("Roads/RoadZ/CollisionShape3D") != null)
@@ -30,6 +37,26 @@ func _run() -> void:
 	_expect("navigation region has generated navigation data", navigation_region != null and navigation_region.navigation_mesh != null)
 	_expect("repeated geometry uses MultiMesh", district_a.get_node_or_null("BuildingBlocks/Style0") is MultiMeshInstance3D and district_a.get_node_or_null("StreetFurniture/LampPosts") is MultiMeshInstance3D)
 	_expect("scene tree stays compact", _count_nodes(district_a) < 180)
+
+	var player := preload("res://scenes/Player.tscn").instantiate() as CharacterBody3D
+	var vehicle := preload("res://scenes/ArcadeVehicle.tscn").instantiate() as RigidBody3D
+	root.add_child(player)
+	root.add_child(vehicle)
+	player.global_position = player_spawn_a
+	vehicle.global_position = vehicle_spawn_a
+	await process_frame
+	var player_shape := player.get_node("CollisionShape3D") as CollisionShape3D
+	var overlap_query := PhysicsShapeQueryParameters3D.new()
+	overlap_query.shape = player_shape.shape
+	overlap_query.transform = player_shape.global_transform
+	overlap_query.collision_mask = 4
+	var initial_overlaps: Array[Dictionary] = district_a.get_world_3d().direct_space_state.intersect_shape(overlap_query, 16)
+	_expect("initial player and vehicle collision shapes do not overlap", initial_overlaps.is_empty())
+	var player_position_before_entry := player.global_position
+	var entered_on_first_frame := bool(vehicle.call("try_enter", player))
+	_expect("vehicle entry succeeds on first frame without moving player", entered_on_first_frame and player.global_position == player_position_before_entry)
+	player.queue_free()
+	vehicle.queue_free()
 
 	district_a.queue_free()
 	district_b.queue_free()

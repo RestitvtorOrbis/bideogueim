@@ -27,6 +27,7 @@ var _role_cursor: int = 0
 var _initial_spawned_count: int = 0
 var _initial_visible_slots_used: int = 0
 var _configured: bool = false
+var _elapsed_since_configure: float = 0.0
 
 func _ready() -> void:
 	_spawn_rng.randomize()
@@ -57,6 +58,7 @@ func configure(world: Node3D, player: Node, settings: CrowdSettings = null) -> v
 	_role_cursor = 0
 	_mid_clock = 0.0
 	_far_clock = 0.0
+	_elapsed_since_configure = 0.0
 	_configured = _district != null and _player != null and crowd_settings != null
 	if not _configured:
 		return
@@ -77,6 +79,7 @@ func configure(world: Node3D, player: Node, settings: CrowdSettings = null) -> v
 func _physics_process(delta: float) -> void:
 	if not _configured or _district == null or _player == null or crowd_settings == null:
 		return
+	advance_elapsed_time(delta)
 	# Recycle before replenishing so a dead or distant NPC frees its slot this frame.
 	_recycle_disabled_npcs()
 	_recycle_out_of_range_npcs()
@@ -99,6 +102,8 @@ func _physics_process(delta: float) -> void:
 		var npc_node := npc as Node3D
 		if npc_node == null:
 			continue
+		if npc.has_method("configure_run_safety"):
+			npc.call("configure_run_safety", _is_hostile_grace_active(), crowd_settings.hostile_safe_radius)
 		var distance: float = npc_node.global_position.distance_to(player_node.global_position)
 		if distance <= crowd_settings.full_ai_distance:
 			npc.call("tick", delta, true)
@@ -174,7 +179,12 @@ func _spawn_role(role: String, prefer_visible: bool = false, near_player: bool =
 	var points := _get_spawn_points(role)
 	if points.is_empty():
 		return false
-	var spawn_result := _find_spawn_position(points, prefer_visible, near_player)
+	var spawn_result := _find_spawn_position(
+		points,
+		prefer_visible,
+		near_player,
+		_get_spawn_minimum_distance(role, near_player)
+	)
 	if not bool(spawn_result.get("found", false)):
 		return false
 	var pool := _civilian_pool if role == "civilian" else _hostile_pool
@@ -187,17 +197,24 @@ func _spawn_role(role: String, prefer_visible: bool = false, near_player: bool =
 	var npc := pool.checkout(profile, spawn_result["position"], lifecycle_id, group_id, _player)
 	if npc == null:
 		return false
+	if npc.has_method("configure_run_safety"):
+		npc.call("configure_run_safety", _is_hostile_grace_active(), crowd_settings.hostile_safe_radius)
 	_active_npcs[npc] = role
 	return true
 
-func _find_spawn_position(points: Array[Marker3D], prefer_visible: bool, near_player: bool) -> Dictionary:
+func _find_spawn_position(
+		points: Array[Marker3D],
+		prefer_visible: bool,
+		near_player: bool,
+		spawn_minimum_distance: float = -1.0
+	) -> Dictionary:
 	var shuffled_points := _shuffled_points(points)
 	var attempts := maxi(1, crowd_settings.spawn_candidate_attempts)
 	var fallback_position := Vector3.ZERO
 	var has_fallback := false
 	for attempt in range(attempts):
 		var point: Marker3D = shuffled_points[attempt % shuffled_points.size()]
-		var candidate := _build_spawn_candidate(point, near_player)
+		var candidate := _build_spawn_candidate(point, near_player, spawn_minimum_distance)
 		if not _is_in_spawn_range(candidate):
 			continue
 		var is_separated := _is_separated_from_active(candidate)
@@ -215,7 +232,7 @@ func _find_spawn_position(points: Array[Marker3D], prefer_visible: bool, near_pl
 		return {"found": true, "position": fallback_position}
 	return {"found": false, "position": Vector3.ZERO}
 
-func _build_spawn_candidate(point: Marker3D, near_player: bool) -> Vector3:
+func _build_spawn_candidate(point: Marker3D, near_player: bool, spawn_minimum_distance: float = -1.0) -> Vector3:
 	var anchor := point.global_position
 	var player_node := _player as Node3D
 	if player_node == null:
@@ -231,7 +248,8 @@ func _build_spawn_candidate(point: Marker3D, near_player: bool) -> Vector3:
 	var maximum_distance := maxf(1.0, crowd_settings.spawn_distance - crowd_settings.spawn_edge_padding)
 	if near_player:
 		maximum_distance = minf(maximum_distance, maxf(1.0, crowd_settings.initial_spawn_distance))
-	var minimum_distance := clampf(crowd_settings.minimum_spawn_distance, 0.0, maximum_distance)
+	var requested_minimum := crowd_settings.minimum_spawn_distance if spawn_minimum_distance < 0.0 else spawn_minimum_distance
+	var minimum_distance := clampf(requested_minimum, 0.0, maximum_distance)
 	var candidate := anchor
 	if near_player or anchor_distance > maximum_distance:
 		var angle := _spawn_rng.randf_range(0.0, TAU)
@@ -272,6 +290,16 @@ func _get_spawn_points(role: String) -> Array[Marker3D]:
 			if point != null and is_instance_valid(point):
 				points.append(point)
 	return points
+
+func _get_spawn_minimum_distance(role: String, initial_phase: bool) -> float:
+	var configured_minimum := maxf(0.0, crowd_settings.minimum_spawn_distance)
+	if initial_phase:
+		if role == "hostile":
+			return maxf(configured_minimum, crowd_settings.initial_hostile_minimum_spawn_distance)
+		return maxf(configured_minimum, crowd_settings.initial_civilian_minimum_spawn_distance)
+	if role == "hostile":
+		return maxf(configured_minimum, crowd_settings.hostile_respawn_minimum_spawn_distance)
+	return configured_minimum
 
 func _shuffled_points(points: Array[Marker3D]) -> Array[Marker3D]:
 	var shuffled: Array[Marker3D] = points.duplicate()
@@ -376,6 +404,33 @@ func release_all() -> void:
 	_hostile_pool.release_all()
 	_initial_spawned_count = 0
 	_initial_visible_slots_used = 0
+	_elapsed_since_configure = 0.0
+
+func advance_elapsed_time(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	_elapsed_since_configure += delta
+	_sync_npc_safety()
+
+func set_elapsed_time(elapsed: float) -> void:
+	_elapsed_since_configure = maxf(0.0, elapsed)
+	_sync_npc_safety()
+
+func get_elapsed_since_configure() -> float:
+	return _elapsed_since_configure
+
+func is_hostile_grace_active() -> bool:
+	return _is_hostile_grace_active()
+
+func _is_hostile_grace_active() -> bool:
+	return crowd_settings != null and _elapsed_since_configure < maxf(0.0, crowd_settings.hostile_grace_period)
+
+func _sync_npc_safety() -> void:
+	if crowd_settings == null:
+		return
+	for npc in _active_npcs.keys():
+		if is_instance_valid(npc) and npc.has_method("configure_run_safety"):
+			npc.call("configure_run_safety", _is_hostile_grace_active(), crowd_settings.hostile_safe_radius)
 
 func get_active_npc_count() -> int:
 	return active_npc_count

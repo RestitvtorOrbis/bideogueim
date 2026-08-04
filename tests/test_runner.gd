@@ -16,7 +16,9 @@ func _run() -> void:
 		preload("res://tests/test_system_contracts.gd").new(),
 		preload("res://tests/test_player_movement.gd").new(),
 		preload("res://tests/test_population.gd").new(),
-		preload("res://tests/test_music.gd").new()
+		preload("res://tests/test_music.gd").new(),
+		preload("res://tests/test_character_catalog.gd").new(),
+		preload("res://tests/test_character_visuals.gd").new()
 	]
 	var results: Array[Dictionary] = []
 	for suite in suites:

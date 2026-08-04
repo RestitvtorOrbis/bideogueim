@@ -28,4 +28,73 @@ Los mapas PBR externos de esta iteración proceden de páginas oficiales de Poly
 - No addon or project setting was introduced.
 - Procedural city geometry preserves the collision, navigation and spawn contracts used by gameplay systems.
 - Original background music: `assets/audio/music/bebop_night_drive.wav`, composed and rendered by `tools/generate_bebop.py` under CC0 1.0. Deterministic seed `26431`; SHA-256 `7e629cfcdd1eea839da66e7f3b49fe85388b44dbf1892a7867ba1a33dca125ac`; stereo 16-bit PCM, 44,100 Hz, 40.851066 seconds, measured quantized peak `0.779968` (-2.158 dBFS). The arrangement contains walking bass, ride/snare swing, piano comping and an original sax-like lead. No song or artist is imitated. The generator always retains this lossless WAV and may add an OGG delivery when FFmpeg is available; the controller uses the existing `Music` bus when available and otherwise falls back to `Master` without changing SFX.
+
+## UXR-01 — Quaternius Universal Base Characters
+
+Decision-owner resolution: Option A. The free Standard archive is intentionally limited to the two available adult body bases, Superhero Male and Superhero Female. Regular models were not required and no paid Source archive was purchased.
+
+Retrieval date: 2026-08-04. Author: Quaternius. License: CC0 1.0 Universal / Public Domain Dedication. Canonical sources: [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html), [Universal Base Characters itch landing page](https://quaternius.itch.io/universal-base-characters), and [Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html).
+
+### Source archives
+
+| Archive | Canonical source | Exact archive size | SHA-256 |
+|---|---|---:|---|
+| `Universal Base Characters[Standard].zip` | [itch.io Standard download](https://quaternius.itch.io/universal-base-characters) | 128,968,391 bytes | `FDBF1804C90DFC1EA03E992BFF7DA2DFD1A79318E13270A660180F9308455F40` |
+| `Universal Animation Library[Standard].zip` | [Quaternius animation library](https://quaternius.com/packs/universalanimationlibrary.html) | 15,904,933 bytes | `CC73FC4E495B82958207316596317A3F40B9FA38065BDE1027937452DA537724` |
+
+### Retained files
+
+Only glTF/GLB payloads and their referenced buffers/textures are retained. Generated Godot `.import` metadata is local import output and is not part of the retained source inventory.
+
+```text
+assets/characters/quaternius/animations/locomotion.glb
+
+assets/characters/quaternius/models/Superhero_Female_FullBody.gltf
+assets/characters/quaternius/models/Superhero_Female_FullBody.bin
+assets/characters/quaternius/models/Superhero_Male_FullBody.gltf
+assets/characters/quaternius/models/Superhero_Male_FullBody.bin
+assets/characters/quaternius/models/T_Eye_Brown.png
+assets/characters/quaternius/models/T_Eye_Normal.png
+assets/characters/quaternius/models/T_Eye_Normal_png.png
+assets/characters/quaternius/models/T_Hair_1_BaseColor.png
+assets/characters/quaternius/models/T_Hair_1_Normal.png
+assets/characters/quaternius/models/T_Hair_1_Normal_png.png
+assets/characters/quaternius/models/T_Hair_2_BaseColor.png
+assets/characters/quaternius/models/T_Hair_2_Normal.png
+assets/characters/quaternius/models/T_Superhero_Female_Dark_BaseColor.png
+assets/characters/quaternius/models/T_Superhero_Female_Normal.png
+assets/characters/quaternius/models/T_Superhero_Female_Roughness.png
+assets/characters/quaternius/models/T_Superhero_Male_Dark.png
+assets/characters/quaternius/models/T_Superhero_Male_Normal.png
+assets/characters/quaternius/models/T_Superhero_Male_Roughness.png
+
+assets/characters/quaternius/hairstyles/Eyebrows_Female.gltf
+assets/characters/quaternius/hairstyles/Eyebrows_Female.bin
+assets/characters/quaternius/hairstyles/Eyebrows_Regular.gltf
+assets/characters/quaternius/hairstyles/Eyebrows_Regular.bin
+assets/characters/quaternius/hairstyles/Hair_Beard.gltf
+assets/characters/quaternius/hairstyles/Hair_Beard.bin
+assets/characters/quaternius/hairstyles/Hair_Buns.gltf
+assets/characters/quaternius/hairstyles/Hair_Buns.bin
+assets/characters/quaternius/hairstyles/Hair_Buzzed.gltf
+assets/characters/quaternius/hairstyles/Hair_Buzzed.bin
+assets/characters/quaternius/hairstyles/Hair_BuzzedFemale.gltf
+assets/characters/quaternius/hairstyles/Hair_BuzzedFemale.bin
+assets/characters/quaternius/hairstyles/Hair_Long.gltf
+assets/characters/quaternius/hairstyles/Hair_Long.bin
+assets/characters/quaternius/hairstyles/Hair_SimpleParted.gltf
+assets/characters/quaternius/hairstyles/Hair_SimpleParted.bin
+assets/characters/quaternius/hairstyles/T_Hair_1_BaseColor.png
+assets/characters/quaternius/hairstyles/T_Hair_1_Normal.png
+assets/characters/quaternius/hairstyles/T_Hair_2_BaseColor.png
+assets/characters/quaternius/hairstyles/T_Hair_2_Normal.png
+```
+
+### Selection and modifications
+
+- The two retained body bases are the Standard pack's `Superhero_Female_FullBody.gltf` and `Superhero_Male_FullBody.gltf` Godot exports.
+- The eight retained hairstyles are the Standard pack's `Rigged to Head Bone/glTF (Godot -Unreal)` exports: `Eyebrows_Female`, `Eyebrows_Regular`, `Hair_Beard`, `Hair_Buns`, `Hair_Buzzed`, `Hair_BuzzedFemale`, `Hair_Long`, and `Hair_SimpleParted`. These are the complete eight low-cost head-rigged hairstyle assets in the Standard payload; their meshes range from 830 to 3,284 triangles.
+- `animations/locomotion.glb` is a derived, compact GLB from `UAL1_Standard.glb`. The source library contained 43 animations; only `Idle_Loop`, `Walk_Loop`, and `Jog_Fwd_Loop` remain. The mannequin mesh, materials, embedded image, unused animation accessors, and unused animation data were removed. The result has no external URI dependencies.
+- The Standard male glTF references two unavailable exported texture names, `T_Eye_Normal_png.png` and `T_Hair_1_Normal_png.png`. The retained same-content alias files supply those exact references without modifying the vendor glTF JSON. Their bytes match `T_Eye_Normal.png` and `T_Hair_1_Normal.png`, respectively.
+- No ZIP archive, FBX, OBJ, Blend source, teen model, unused animation, scene integration, gameplay code, or product file was added.
 - Los 12 mapas JPG externos descargados en esta iteración están enumerados arriba con su página oficial, autor, licencia, tamaño y uso; el resto de geometría y shaders es original y procedural.
