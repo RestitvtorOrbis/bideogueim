@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/District.tscn" id="2_district"]
@@ -10,6 +10,7 @@
 [ext_resource type="PackedScene" path="res://scenes/GameOverScreen.tscn" id="8_gameover"]
 [ext_resource type="PackedScene" path="res://scenes/GoreMenu.tscn" id="9_menu"]
 [ext_resource type="Script" path="res://scripts/benchmark/benchmark_scene.gd" id="10_placeholder"]
+[ext_resource type="Script" path="res://scripts/audio/background_music_controller.gd" id="11_music"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
@@ -25,6 +26,9 @@ script = ExtResource("5_population")
 
 [node name="ImpactEffects" type="Node3D" parent="."]
 script = ExtResource("6_effects")
+
+[node name="BackgroundMusic" type="Node" parent="."]
+script = ExtResource("11_music")
 
 [node name="HUD" parent="." instance=ExtResource("7_hud")]
 

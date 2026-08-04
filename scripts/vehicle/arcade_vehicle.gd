@@ -129,13 +129,18 @@ func _is_exit_position_clear(position: Vector3) -> bool:
 
 func reset_to_nearest_road() -> void:
 	var reset_position := global_position
-	reset_position.x = clampf(reset_position.x, -72.0, 72.0)
-	reset_position.z = clampf(reset_position.z, -72.0, 72.0)
-	if absf(reset_position.x) > absf(reset_position.z):
-		reset_position.z = 0.0
+	var current_scene := get_tree().current_scene
+	var district := current_scene.get_node_or_null("District") if current_scene != null else null
+	if district != null and district.has_method("get_nearest_road_position"):
+		reset_position = district.call("get_nearest_road_position", global_position)
 	else:
-		reset_position.x = 0.0
-	reset_position.y = 1.25
+		reset_position.x = clampf(reset_position.x, -72.0, 72.0)
+		reset_position.z = clampf(reset_position.z, -72.0, 72.0)
+		if absf(reset_position.x) > absf(reset_position.z):
+			reset_position.z = 0.0
+		else:
+			reset_position.x = 0.0
+		reset_position.y = 1.25
 	global_position = reset_position
 	rotation = Vector3.ZERO
 	linear_velocity = Vector3.ZERO

@@ -1,87 +1,23 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/district.gd" id="1_district"]
 
-[sub_resource type="StandardMaterial3D" id="RoadMaterial"]
-albedo_color = Color(0.055, 0.065, 0.08, 1)
-roughness = 0.94
-
-[sub_resource type="StandardMaterial3D" id="SidewalkMaterial"]
-albedo_color = Color(0.34, 0.37, 0.4, 1)
-roughness = 0.82
-
-[sub_resource type="StandardMaterial3D" id="GroundMaterial"]
-albedo_color = Color(0.12, 0.19, 0.16, 1)
-roughness = 1.0
-
-[sub_resource type="StandardMaterial3D" id="BuildingMaterialA"]
-albedo_color = Color(0.27, 0.3, 0.36, 1)
-roughness = 0.82
-
-[sub_resource type="StandardMaterial3D" id="BuildingMaterialB"]
-albedo_color = Color(0.42, 0.3, 0.28, 1)
-roughness = 0.82
-
-[sub_resource type="BoxMesh" id="GroundMesh"]
-size = Vector3(180, 0.4, 180)
-material = SubResource("GroundMaterial")
-
-[sub_resource type="BoxShape3D" id="GroundShape"]
-size = Vector3(180, 0.4, 180)
-
-[sub_resource type="BoxMesh" id="RoadXMesh"]
-size = Vector3(160, 0.18, 18)
-material = SubResource("RoadMaterial")
-
-[sub_resource type="BoxShape3D" id="RoadXShape"]
-size = Vector3(160, 0.18, 18)
-
-[sub_resource type="BoxMesh" id="RoadZMesh"]
-size = Vector3(18, 0.18, 160)
-material = SubResource("RoadMaterial")
-
-[sub_resource type="BoxShape3D" id="RoadZShape"]
-size = Vector3(18, 0.18, 160)
-
-[sub_resource type="BoxMesh" id="SidewalkXMesh"]
-size = Vector3(160, 0.42, 4)
-material = SubResource("SidewalkMaterial")
-
-[sub_resource type="BoxShape3D" id="SidewalkXShape"]
-size = Vector3(160, 0.42, 4)
-
-[sub_resource type="BoxMesh" id="SidewalkZMesh"]
-size = Vector3(4, 0.42, 160)
-material = SubResource("SidewalkMaterial")
-
-[sub_resource type="BoxShape3D" id="SidewalkZShape"]
-size = Vector3(4, 0.42, 160)
-
-[sub_resource type="BoxMesh" id="BuildingMeshA"]
-size = Vector3(24, 12, 24)
-material = SubResource("BuildingMaterialA")
-
-[sub_resource type="BoxMesh" id="BuildingMeshB"]
-size = Vector3(18, 18, 18)
-material = SubResource("BuildingMaterialB")
-
-[sub_resource type="BoxShape3D" id="BuildingShapeA"]
-size = Vector3(24, 12, 24)
-
-[sub_resource type="BoxShape3D" id="BuildingShapeB"]
-size = Vector3(18, 18, 18)
-
 [sub_resource type="Environment" id="Environment"]
 background_mode = 1
-background_color = Color(0.08, 0.13, 0.2, 1)
+background_color = Color(0.035, 0.06, 0.1, 1)
 ambient_light_source = 3
-ambient_light_color = Color(0.42, 0.5, 0.65, 1)
-ambient_light_energy = 0.8
+ambient_light_color = Color(0.48, 0.56, 0.72, 1)
+ambient_light_energy = 0.72
+reflected_light_source = 2
 tonemap_mode = 2
-
-[sub_resource type="NavigationMesh" id="NavigationMesh"]
-vertices = PackedVector3Array(-80, 0.25, -80, 80, 0.25, -80, 80, 0.25, 80, -80, 0.25, 80)
-polygons = [PackedInt32Array(0, 1, 2, 3)]
+glow_enabled = true
+glow_intensity = 0.85
+glow_bloom = 0.12
+fog_enabled = true
+fog_light_color = Color(0.15, 0.2, 0.28, 1)
+fog_density = 0.0018
+fog_height = 12.0
+fog_height_density = 0.018
 
 [node name="District" type="Node3D"]
 script = ExtResource("1_district")
@@ -94,177 +30,7 @@ rotation_degrees = Vector3(-52, -28, 0)
 light_color = Color(1, 0.88, 0.74, 1)
 light_energy = 1.25
 shadow_enabled = true
-
-[node name="Ground" type="StaticBody3D" parent="."]
-collision_layer = 1
-collision_mask = 31
-
-[node name="Mesh" type="MeshInstance3D" parent="Ground"]
-mesh = SubResource("GroundMesh")
-position = Vector3(0, -0.2, 0)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
-position = Vector3(0, -0.2, 0)
-shape = SubResource("GroundShape")
-
-[node name="Roads" type="Node3D" parent="."]
-
-[node name="RoadX" type="StaticBody3D" parent="Roads"]
-collision_layer = 1
-collision_mask = 31
-
-[node name="Mesh" type="MeshInstance3D" parent="Roads/RoadX"]
-mesh = SubResource("RoadXMesh")
-position = Vector3(0, 0.03, 0)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Roads/RoadX"]
-position = Vector3(0, 0.03, 0)
-shape = SubResource("RoadXShape")
-
-[node name="RoadZ" type="StaticBody3D" parent="Roads"]
-collision_layer = 1
-collision_mask = 31
-
-[node name="Mesh" type="MeshInstance3D" parent="Roads/RoadZ"]
-mesh = SubResource("RoadZMesh")
-position = Vector3(0, 0.03, 0)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Roads/RoadZ"]
-position = Vector3(0, 0.03, 0)
-shape = SubResource("RoadZShape")
-
-[node name="Sidewalks" type="Node3D" parent="."]
-
-[node name="North" type="StaticBody3D" parent="Sidewalks"]
-collision_layer = 1
-collision_mask = 31
-position = Vector3(0, 0.22, -11)
-
-[node name="Mesh" type="MeshInstance3D" parent="Sidewalks/North"]
-mesh = SubResource("SidewalkXMesh")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Sidewalks/North"]
-shape = SubResource("SidewalkXShape")
-
-[node name="South" type="StaticBody3D" parent="Sidewalks"]
-collision_layer = 1
-collision_mask = 31
-position = Vector3(0, 0.22, 11)
-
-[node name="Mesh" type="MeshInstance3D" parent="Sidewalks/South"]
-mesh = SubResource("SidewalkXMesh")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Sidewalks/South"]
-shape = SubResource("SidewalkXShape")
-
-[node name="West" type="StaticBody3D" parent="Sidewalks"]
-collision_layer = 1
-collision_mask = 31
-position = Vector3(-11, 0.22, 0)
-
-[node name="Mesh" type="MeshInstance3D" parent="Sidewalks/West"]
-mesh = SubResource("SidewalkZMesh")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Sidewalks/West"]
-shape = SubResource("SidewalkZShape")
-
-[node name="East" type="StaticBody3D" parent="Sidewalks"]
-collision_layer = 1
-collision_mask = 31
-position = Vector3(11, 0.22, 0)
-
-[node name="Mesh" type="MeshInstance3D" parent="Sidewalks/East"]
-mesh = SubResource("SidewalkZMesh")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Sidewalks/East"]
-shape = SubResource("SidewalkZShape")
-
-[node name="BuildingBlocks" type="Node3D" parent="."]
-
-[node name="BlockNorthWest" type="StaticBody3D" parent="BuildingBlocks"]
-collision_layer = 1
-collision_mask = 31
-position = Vector3(-42, 6, -42)
-
-[node name="Mesh" type="MeshInstance3D" parent="BuildingBlocks/BlockNorthWest"]
-mesh = SubResource("BuildingMeshA")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="BuildingBlocks/BlockNorthWest"]
-shape = SubResource("BuildingShapeA")
-
-[node name="BlockNorthEast" type="StaticBody3D" parent="BuildingBlocks"]
-collision_layer = 1
-collision_mask = 31
-position = Vector3(42, 9, -42)
-
-[node name="Mesh" type="MeshInstance3D" parent="BuildingBlocks/BlockNorthEast"]
-mesh = SubResource("BuildingMeshB")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="BuildingBlocks/BlockNorthEast"]
-shape = SubResource("BuildingShapeB")
-
-[node name="BlockSouthWest" type="StaticBody3D" parent="BuildingBlocks"]
-collision_layer = 1
-collision_mask = 31
-position = Vector3(-42, 9, 42)
-
-[node name="Mesh" type="MeshInstance3D" parent="BuildingBlocks/BlockSouthWest"]
-mesh = SubResource("BuildingMeshB")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="BuildingBlocks/BlockSouthWest"]
-shape = SubResource("BuildingShapeB")
-
-[node name="BlockSouthEast" type="StaticBody3D" parent="BuildingBlocks"]
-collision_layer = 1
-collision_mask = 31
-position = Vector3(42, 6, 42)
-
-[node name="Mesh" type="MeshInstance3D" parent="BuildingBlocks/BlockSouthEast"]
-mesh = SubResource("BuildingMeshA")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="BuildingBlocks/BlockSouthEast"]
-shape = SubResource("BuildingShapeA")
+directional_shadow_max_distance = 420.0
 
 [node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
 navigation_layers = 1
-navigation_mesh = SubResource("NavigationMesh")
-
-[node name="PlayerSpawn" type="Marker3D" parent="."]
-position = Vector3(0, 1.2, 6)
-
-[node name="VehicleSpawn" type="Marker3D" parent="."]
-position = Vector3(4, 1.2, 4)
-
-[node name="SpawnZones" type="Node3D" parent="."]
-
-[node name="CivilianNorth" type="Marker3D" parent="SpawnZones"]
-position = Vector3(0, 1.2, -78)
-groups = ["civilian_spawn"]
-
-[node name="CivilianSouth" type="Marker3D" parent="SpawnZones"]
-position = Vector3(0, 1.2, 78)
-groups = ["civilian_spawn"]
-
-[node name="CivilianWest" type="Marker3D" parent="SpawnZones"]
-position = Vector3(-78, 1.2, 0)
-groups = ["civilian_spawn"]
-
-[node name="CivilianEast" type="Marker3D" parent="SpawnZones"]
-position = Vector3(78, 1.2, 0)
-groups = ["civilian_spawn"]
-
-[node name="HostileNorthWest" type="Marker3D" parent="SpawnZones"]
-position = Vector3(-72, 1.2, -72)
-groups = ["hostile_spawn"]
-
-[node name="HostileNorthEast" type="Marker3D" parent="SpawnZones"]
-position = Vector3(72, 1.2, -72)
-groups = ["hostile_spawn"]
-
-[node name="HostileSouthWest" type="Marker3D" parent="SpawnZones"]
-position = Vector3(-72, 1.2, 72)
-groups = ["hostile_spawn"]
-
-[node name="HostileSouthEast" type="Marker3D" parent="SpawnZones"]
-position = Vector3(72, 1.2, 72)
-groups = ["hostile_spawn"]

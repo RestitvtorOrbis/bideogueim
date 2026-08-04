@@ -16,11 +16,26 @@ func _ready() -> void:
 	add_to_group("player")
 	health.configure(100.0)
 	health.died.connect(_on_died)
+	_configure_camera_rig()
 	camera.current = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
+func _configure_camera_rig() -> void:
+	if camera_rig == null:
+		return
+	# The camera must orbit independently from the body. If it inherits the
+	# body's yaw, turning the body toward camera-relative movement also turns
+	# the movement reference and makes W appear to rotate the player.
+	var camera_yaw := camera_rig.global_rotation.y
+	if camera_rig.has_method("set_world_space_follow"):
+		camera_rig.call("set_world_space_follow", true)
+	else:
+		camera_rig.top_level = true
+		camera_rig.global_position = global_position + Vector3.UP * 1.25
+	camera_rig.global_rotation = Vector3(_camera_pitch, camera_yaw, 0.0)
+
 func _unhandled_input(event: InputEvent) -> void:
-	if GameState.is_game_over or occupied_vehicle != null:
+	if _is_game_over() or occupied_vehicle != null:
 		return
 	if event is InputEventMouseMotion:
 		var motion := event as InputEventMouseMotion
@@ -29,7 +44,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera_rig.rotation.x = _camera_pitch
 
 func _physics_process(delta: float) -> void:
-	if GameState.is_game_over:
+	if _is_game_over():
 		velocity = Vector3.ZERO
 		return
 	if occupied_vehicle != null:
@@ -48,20 +63,37 @@ func _physics_process(delta: float) -> void:
 		camera_rig.rotation.x = _camera_pitch
 
 	var input_vector := Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
-	var basis := camera_rig.global_transform.basis
-	var direction := (basis.x * input_vector.x + basis.z * input_vector.y)
-	direction.y = 0.0
-	direction = direction.normalized()
+	var direction := camera_relative_direction(input_vector, camera_rig.global_transform.basis)
 	var speed := sprint_speed if Input.is_action_pressed("sprint") else walk_speed
 	if direction != Vector3.ZERO:
 		velocity.x = move_toward(velocity.x, direction.x * speed, 30.0 * delta)
 		velocity.z = move_toward(velocity.z, direction.z * speed, 30.0 * delta)
-		var target_yaw := atan2(-direction.x, -direction.z)
+		var target_yaw := yaw_for_direction(direction)
 		rotation.y = lerp_angle(rotation.y, target_yaw, clampf(delta * 10.0, 0.0, 1.0))
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, 30.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, 30.0 * delta)
 	move_and_slide()
+
+static func camera_relative_direction(input_vector: Vector2, camera_basis: Basis) -> Vector3:
+	var forward := Vector3(-camera_basis.z.x, 0.0, -camera_basis.z.z)
+	if forward.length_squared() <= 0.000001:
+		forward = Vector3.FORWARD
+	else:
+		forward = forward.normalized()
+	var right := Vector3(camera_basis.x.x, 0.0, camera_basis.x.z)
+	if right.length_squared() <= 0.000001:
+		right = Vector3.RIGHT
+	else:
+		right = right.normalized()
+	var direction := right * input_vector.x + forward * -input_vector.y
+	return direction.normalized() if direction.length_squared() > 0.000001 else Vector3.ZERO
+
+static func yaw_for_direction(direction: Vector3) -> float:
+	var flat_direction := Vector3(direction.x, 0.0, direction.z)
+	if flat_direction.length_squared() <= 0.000001:
+		return 0.0
+	return atan2(-flat_direction.x, -flat_direction.z)
 
 func apply_damage(amount: float) -> void:
 	if occupied_vehicle != null and occupied_vehicle.has_method("apply_damage"):
@@ -97,4 +129,10 @@ func _try_enter_nearest_vehicle() -> void:
 		nearest.try_enter(self)
 
 func _on_died() -> void:
-	GameState.finish_run()
+	var game_state := get_node_or_null("/root/GameState")
+	if game_state != null and game_state.has_method("finish_run"):
+		game_state.call("finish_run")
+
+func _is_game_over() -> bool:
+	var game_state := get_node_or_null("/root/GameState")
+	return game_state != null and bool(game_state.get("is_game_over"))

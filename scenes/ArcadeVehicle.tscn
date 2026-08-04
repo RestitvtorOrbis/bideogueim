@@ -1,13 +1,14 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=24 format=3]
 
 [ext_resource type="Script" path="res://scripts/vehicle/arcade_vehicle.gd" id="1_vehicle"]
 [ext_resource type="Script" path="res://scripts/player/third_person_camera.gd" id="2_camera"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="3_health"]
+[ext_resource type="Script" path="res://scripts/visual/vehicle_visuals.gd" id="4_visual"]
 
 [sub_resource type="StandardMaterial3D" id="VehicleMaterial"]
-albedo_color = Color(0.82, 0.16, 0.09, 1)
-metallic = 0.48
-roughness = 0.34
+albedo_color = Color(0.56, 0.035, 0.09, 1)
+metallic = 0.58
+roughness = 0.26
 
 [sub_resource type="BoxMesh" id="VehicleMesh"]
 size = Vector3(2.1, 0.75, 4.2)
@@ -17,18 +18,66 @@ material = SubResource("VehicleMaterial")
 size = Vector3(2.1, 0.75, 4.2)
 
 [sub_resource type="StandardMaterial3D" id="WindowMaterial"]
-albedo_color = Color(0.04, 0.12, 0.2, 1)
-metallic = 0.55
-roughness = 0.2
+albedo_color = Color(0.015, 0.08, 0.16, 1)
+metallic = 0.72
+roughness = 0.12
 
 [sub_resource type="BoxMesh" id="CabinMesh"]
 size = Vector3(1.55, 0.65, 1.8)
+
+[sub_resource type="StandardMaterial3D" id="AccentMaterial"]
+albedo_color = Color(0.02, 0.3, 0.42, 1)
+emission_enabled = true
+emission = Color(0.02, 0.72, 0.92, 1)
+emission_energy_multiplier = 2.3
+metallic = 0.3
+roughness = 0.2
+
+[sub_resource type="StandardMaterial3D" id="TireMaterial"]
+albedo_color = Color(0.008, 0.012, 0.02, 1)
+metallic = 0.12
+roughness = 0.92
+
+[sub_resource type="StandardMaterial3D" id="HubMaterial"]
+albedo_color = Color(0.38, 0.48, 0.58, 1)
+metallic = 0.82
+roughness = 0.2
+
+[sub_resource type="StandardMaterial3D" id="RearLightMaterial"]
+albedo_color = Color(0.8, 0.015, 0.025, 1)
+emission_enabled = true
+emission = Color(1, 0.015, 0.01, 1)
+emission_energy_multiplier = 2.5
+
+[sub_resource type="BoxMesh" id="HoodMesh"]
+size = Vector3(1.78, 0.18, 1.05)
+
+[sub_resource type="BoxMesh" id="RoofMesh"]
+size = Vector3(1.7, 0.12, 1.65)
+
+[sub_resource type="BoxMesh" id="LightMesh"]
+size = Vector3(0.58, 0.16, 0.06)
+
+[sub_resource type="BoxMesh" id="AccentMesh"]
+size = Vector3(1.45, 0.06, 0.06)
+
+[sub_resource type="BoxMesh" id="RearLightMesh"]
+size = Vector3(0.62, 0.14, 0.06)
 material = SubResource("WindowMaterial")
 
 [sub_resource type="CylinderMesh" id="WheelMesh"]
 top_radius = 0.34
 bottom_radius = 0.34
 height = 0.24
+radial_segments = 16
+material = SubResource("TireMaterial")
+
+[sub_resource type="CylinderMesh" id="HubMesh"]
+top_radius = 0.16
+bottom_radius = 0.16
+height = 0.26
+radial_segments = 12
+material = SubResource("HubMaterial")
 
 [sub_resource type="CapsuleShape3D" id="WheelShape"]
 radius = 0.34
@@ -57,11 +106,30 @@ mesh = SubResource("VehicleMesh")
 position = Vector3(0, 1.08, 0.2)
 mesh = SubResource("CabinMesh")
 
+[node name="Hood" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.98, -1.38)
+mesh = SubResource("HoodMesh")
+material_override = SubResource("VehicleMaterial")
+
+[node name="Roof" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.43, 0.22)
+mesh = SubResource("RoofMesh")
+material_override = SubResource("VehicleMaterial")
+
+[node name="AccentStrip" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.79, -2.13)
+mesh = SubResource("AccentMesh")
+material_override = SubResource("AccentMaterial")
+
 [node name="Headlights" type="MeshInstance3D" parent="."]
 position = Vector3(0, 0.6, -2.13)
-scale = Vector3(0.55, 0.18, 0.05)
-mesh = SubResource("CabinMesh")
+mesh = SubResource("LightMesh")
 material_override = SubResource("LightMaterial")
+
+[node name="RearLights" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.67, 2.13)
+mesh = SubResource("RearLightMesh")
+material_override = SubResource("RearLightMaterial")
 
 [node name="WheelFrontLeft" type="Marker3D" parent="."]
 position = Vector3(-0.92, 0.35, -1.35)
@@ -70,12 +138,32 @@ position = Vector3(-0.92, 0.35, -1.35)
 target_position = Vector3(0, -0.8, 0)
 enabled = true
 
+[node name="WheelVisualFrontLeft" type="MeshInstance3D" parent="."]
+position = Vector3(-1.08, 0.35, -1.35)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("WheelMesh")
+
+[node name="HubVisualFrontLeft" type="MeshInstance3D" parent="."]
+position = Vector3(-1.08, 0.35, -1.35)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("HubMesh")
+
 [node name="WheelFrontRight" type="Marker3D" parent="."]
 position = Vector3(0.92, 0.35, -1.35)
 
 [node name="SuspensionRayCast" type="RayCast3D" parent="WheelFrontRight" groups=["vehicle_wheel_raycast"]]
 target_position = Vector3(0, -0.8, 0)
 enabled = true
+
+[node name="WheelVisualFrontRight" type="MeshInstance3D" parent="."]
+position = Vector3(1.08, 0.35, -1.35)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("WheelMesh")
+
+[node name="HubVisualFrontRight" type="MeshInstance3D" parent="."]
+position = Vector3(1.08, 0.35, -1.35)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("HubMesh")
 
 [node name="WheelRearLeft" type="Marker3D" parent="."]
 position = Vector3(-0.92, 0.35, 1.35)
@@ -84,12 +172,32 @@ position = Vector3(-0.92, 0.35, 1.35)
 target_position = Vector3(0, -0.8, 0)
 enabled = true
 
+[node name="WheelVisualRearLeft" type="MeshInstance3D" parent="."]
+position = Vector3(-1.08, 0.35, 1.35)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("WheelMesh")
+
+[node name="HubVisualRearLeft" type="MeshInstance3D" parent="."]
+position = Vector3(-1.08, 0.35, 1.35)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("HubMesh")
+
 [node name="WheelRearRight" type="Marker3D" parent="."]
 position = Vector3(0.92, 0.35, 1.35)
 
 [node name="SuspensionRayCast" type="RayCast3D" parent="WheelRearRight" groups=["vehicle_wheel_raycast"]]
 target_position = Vector3(0, -0.8, 0)
 enabled = true
+
+[node name="WheelVisualRearRight" type="MeshInstance3D" parent="."]
+position = Vector3(1.08, 0.35, 1.35)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("WheelMesh")
+
+[node name="HubVisualRearRight" type="MeshInstance3D" parent="."]
+position = Vector3(1.08, 0.35, 1.35)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("HubMesh")
 
 [node name="CameraRig" type="Node3D" parent="."]
 position = Vector3(0, 2.0, 0)
@@ -106,3 +214,6 @@ fov = 72.0
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("3_health")
 maximum_health = 100.0
+
+[node name="VisualDirector" type="Node3D" parent="."]
+script = ExtResource("4_visual")

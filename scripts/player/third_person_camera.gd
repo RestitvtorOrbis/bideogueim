@@ -1,6 +1,7 @@
 extends Node3D
 
 @export var follow_smoothing: float = 12.0
+@export var follow_height: float = 1.25
 @export var shake_decay: float = 8.0
 @export var shake_position_scale: float = 0.045
 
@@ -13,13 +14,22 @@ func _ready() -> void:
 	_target = get_parent() as Node3D
 	if _camera != null:
 		_base_camera_position = _camera.position
-	if is_instance_valid(CameraShake) and not CameraShake.shake_requested.is_connected(_on_shake):
-		CameraShake.shake_requested.connect(_on_shake)
+	var camera_shake := get_node_or_null("/root/CameraShake")
+	if camera_shake != null and camera_shake.has_signal("shake_requested") and not camera_shake.is_connected("shake_requested", Callable(self, "_on_shake")):
+		camera_shake.connect("shake_requested", Callable(self, "_on_shake"))
+
+func set_world_space_follow(enabled: bool) -> void:
+	# Player movement rotates the visual body, while the orbit yaw must remain
+	# stable until the player explicitly looks. Vehicle cameras keep their
+	# normal parent-relative transform because they do not call this method.
+	top_level = enabled
+	if enabled and is_instance_valid(_target):
+		global_position = _target.global_position + Vector3.UP * follow_height
 
 func _process(delta: float) -> void:
 	if _target == null:
 		return
-	var desired := _target.global_position + Vector3.UP * 1.25
+	var desired := _target.global_position + Vector3.UP * follow_height
 	global_position = global_position.lerp(desired, clampf(delta * follow_smoothing, 0.0, 1.0))
 	_shake_amount = move_toward(_shake_amount, 0.0, delta * shake_decay)
 	if _camera != null:

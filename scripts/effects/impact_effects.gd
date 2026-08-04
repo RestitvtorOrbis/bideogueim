@@ -3,16 +3,21 @@ extends Node3D
 const PARTICLE_POOL_LIMIT := 24
 const DECAL_POOL_LIMIT := 32
 const FRAGMENT_POOL_LIMIT := 48
+const FLASH_POOL_LIMIT := 12
 
 var _particle_pool: Array[GPUParticles3D] = []
 var _decal_pool: Array[MeshInstance3D] = []
 var _fragment_pool: Array[MeshInstance3D] = []
+var _flash_pool: Array[OmniLight3D] = []
 var _audio_pool: Array[AudioStreamPlayer3D] = []
 var _decal_timers: Array[float] = []
 var _fragment_timers: Array[float] = []
+var _flash_timers: Array[float] = []
+var _audio_timers: Array[float] = []
 var _particle_cursor := 0
 var _decal_cursor := 0
 var _fragment_cursor := 0
+var _flash_cursor := 0
 var _audio_cursor := 0
 
 func _ready() -> void:
@@ -31,11 +36,26 @@ func _process(delta: float) -> void:
 			_fragment_timers[index] -= delta
 			if _fragment_timers[index] <= 0.0:
 				_fragment_pool[index].visible = false
+	for index in _flash_timers.size():
+		if _flash_timers[index] > 0.0:
+			_flash_timers[index] -= delta
+			_flash_pool[index].light_energy = clampf(_flash_timers[index] * 22.0, 0.0, 5.0)
+			if _flash_timers[index] <= 0.0:
+				_flash_pool[index].visible = false
+				_flash_pool[index].light_energy = 0.0
+	for index in _audio_timers.size():
+		if _audio_timers[index] > 0.0:
+			_audio_timers[index] -= delta
+			if _audio_timers[index] <= 0.0:
+				_audio_pool[index].stop()
 
 func _build_pools() -> void:
 	var red_material := StandardMaterial3D.new()
-	red_material.albedo_color = Color(0.75, 0.04, 0.025, 1.0)
-	red_material.roughness = 0.82
+	red_material.albedo_color = Color(0.78, 0.035, 0.02, 1.0)
+	red_material.roughness = 0.7
+	red_material.emission_enabled = true
+	red_material.emission = Color(0.32, 0.008, 0.002, 1.0)
+	red_material.emission_energy_multiplier = 0.8
 	red_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	red_material.albedo_color.a = 0.86
 
@@ -85,6 +105,17 @@ func _build_pools() -> void:
 		_fragment_pool.append(fragment)
 		_fragment_timers.append(0.0)
 
+	for _index in FLASH_POOL_LIMIT:
+		var flash := OmniLight3D.new()
+		flash.light_color = Color(1.0, 0.22, 0.04, 1.0)
+		flash.omni_range = 5.5
+		flash.light_energy = 0.0
+		flash.shadow_enabled = false
+		flash.visible = false
+		add_child(flash)
+		_flash_pool.append(flash)
+		_flash_timers.append(0.0)
+
 	var placeholder_stream := AudioStreamGenerator.new()
 	placeholder_stream.mix_rate = 22050.0
 	for _index in 8:
@@ -94,6 +125,7 @@ func _build_pools() -> void:
 		player.max_distance = 38.0
 		add_child(player)
 		_audio_pool.append(player)
+		_audio_timers.append(0.0)
 
 func _on_impact(event: ImpactEvent) -> void:
 	if event == null or not event.qualifying or event.is_disabled:
@@ -102,6 +134,14 @@ func _on_impact(event: ImpactEvent) -> void:
 	var settings: ViolenceSettings = SettingsService.violence if is_instance_valid(SettingsService) else ViolenceSettings.new()
 	if settings.is_disabled():
 		return
+	if event.speed >= 5.0 and not _flash_pool.is_empty():
+		var flash := _flash_pool[_flash_cursor]
+		_flash_cursor = (_flash_cursor + 1) % _flash_pool.size()
+		var flash_index := (_flash_cursor - 1) if _flash_cursor > 0 else _flash_pool.size() - 1
+		flash.global_position = position + Vector3.UP * 0.7
+		flash.visible = true
+		flash.light_energy = 5.0
+		_flash_timers[flash_index] = 0.22
 	if event.speed >= 6.0 and settings.blood_particles_enabled:
 		var particles := _particle_pool[_particle_cursor]
 		_particle_cursor = (_particle_cursor + 1) % _particle_pool.size()
@@ -125,9 +165,11 @@ func _on_impact(event: ImpactEvent) -> void:
 		_fragment_timers[fragment_index] = 2.5
 	if settings.vocal_impact_audio_enabled:
 		var audio := _audio_pool[_audio_cursor]
+		var audio_index := _audio_cursor
 		_audio_cursor = (_audio_cursor + 1) % _audio_pool.size()
 		audio.global_position = position
 		audio.play()
+		_audio_timers[audio_index] = 0.18
 	if settings.impact_camera_shake_enabled and event.speed >= 5.0:
 		CameraShake.request_shake(clampf(event.speed / 22.0, 0.0, 1.0))
 
@@ -135,3 +177,10 @@ func _event_position(event: ImpactEvent) -> Vector3:
 	if event.source is Node3D:
 		return (event.source as Node3D).global_position
 	return Vector3.ZERO
+
+func _exit_tree() -> void:
+	for audio in _audio_pool:
+		if is_instance_valid(audio):
+			audio.stop()
+	if is_instance_valid(ImpactBus) and ImpactBus.impact_received.is_connected(_on_impact):
+		ImpactBus.impact_received.disconnect(_on_impact)

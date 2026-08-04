@@ -1,8 +1,9 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/player/third_person_camera.gd" id="2_camera"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="3_health"]
+[ext_resource type="Script" path="res://scripts/visual/player_visuals.gd" id="4_visual"]
 
 [sub_resource type="CapsuleShape3D" id="PlayerShape"]
 radius = 0.42
@@ -16,10 +17,57 @@ height = 1.8
 albedo_color = Color(0.12, 0.65, 0.82, 1)
 roughness = 0.72
 
+[sub_resource type="StandardMaterial3D" id="HeadMaterial"]
+albedo_color = Color(0.68, 0.78, 0.82, 1)
+metallic = 0.12
+roughness = 0.46
+
 [sub_resource type="CapsuleMesh" id="HeadMesh"]
-material = SubResource("PlayerMaterial")
+material = SubResource("HeadMaterial")
 radius = 0.28
 height = 0.56
+
+[sub_resource type="StandardMaterial3D" id="ArmorMaterial"]
+albedo_color = Color(0.08, 0.17, 0.28, 1)
+metallic = 0.7
+roughness = 0.28
+
+[sub_resource type="StandardMaterial3D" id="AccentMaterial"]
+albedo_color = Color(0.02, 0.3, 0.38, 1)
+emission_enabled = true
+emission = Color(0.02, 0.85, 1, 1)
+emission_energy_multiplier = 2.8
+metallic = 0.2
+roughness = 0.2
+
+[sub_resource type="StandardMaterial3D" id="BootMaterial"]
+albedo_color = Color(0.015, 0.025, 0.045, 1)
+metallic = 0.65
+roughness = 0.36
+
+[sub_resource type="BoxMesh" id="ChestMesh"]
+size = Vector3(0.82, 0.72, 0.48)
+
+[sub_resource type="SphereMesh" id="ShoulderMesh"]
+radius = 0.23
+height = 0.46
+radial_segments = 12
+rings = 6
+
+[sub_resource type="BoxMesh" id="BootMesh"]
+size = Vector3(0.32, 0.24, 0.48)
+
+[sub_resource type="CylinderMesh" id="NeckMesh"]
+top_radius = 0.15
+bottom_radius = 0.18
+height = 0.2
+radial_segments = 12
+
+[sub_resource type="BoxMesh" id="CoreMesh"]
+size = Vector3(0.28, 0.22, 0.055)
+
+[sub_resource type="BoxMesh" id="VisorMesh"]
+size = Vector3(0.42, 0.16, 0.075)
 
 [sub_resource type="SphereShape3D" id="HeadShape"]
 radius = 0.28
@@ -49,12 +97,47 @@ mesh = SubResource("HeadMesh")
 
 [node name="Visor" type="MeshInstance3D" parent="Head"]
 position = Vector3(0, 0.02, -0.25)
-scale = Vector3(0.7, 0.45, 0.2)
-mesh = SubResource("HeadMesh")
+mesh = SubResource("VisorMesh")
 material_override = SubResource("VisorMaterial")
+
+[node name="Neck" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.58, 0)
+mesh = SubResource("NeckMesh")
+material_override = SubResource("ArmorMaterial")
+
+[node name="TorsoArmor" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.08, -0.04)
+mesh = SubResource("ChestMesh")
+material_override = SubResource("ArmorMaterial")
+
+[node name="ShoulderLeft" type="MeshInstance3D" parent="."]
+position = Vector3(-0.45, 1.38, 0)
+mesh = SubResource("ShoulderMesh")
+material_override = SubResource("ArmorMaterial")
+
+[node name="ShoulderRight" type="MeshInstance3D" parent="."]
+position = Vector3(0.45, 1.38, 0)
+mesh = SubResource("ShoulderMesh")
+material_override = SubResource("ArmorMaterial")
+
+[node name="BootLeft" type="MeshInstance3D" parent="."]
+position = Vector3(-0.2, 0.13, -0.05)
+mesh = SubResource("BootMesh")
+material_override = SubResource("BootMaterial")
+
+[node name="BootRight" type="MeshInstance3D" parent="."]
+position = Vector3(0.2, 0.13, -0.05)
+mesh = SubResource("BootMesh")
+material_override = SubResource("BootMaterial")
+
+[node name="ChestCore" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.13, -0.295)
+mesh = SubResource("CoreMesh")
+material_override = SubResource("AccentMaterial")
 
 [node name="CameraRig" type="Node3D" parent="."]
 position = Vector3(0, 1.45, 0)
+top_level = true
 script = ExtResource("2_camera")
 
 [node name="SpringArm3D" type="SpringArm3D" parent="CameraRig"]
@@ -69,3 +152,6 @@ fov = 68.0
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("3_health")
 maximum_health = 100.0
+
+[node name="VisualDirector" type="Node3D" parent="."]
+script = ExtResource("4_visual")

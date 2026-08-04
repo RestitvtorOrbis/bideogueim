@@ -1,10 +1,11 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/npc/npc.gd" id="1_npc"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="2_health"]
 [ext_resource type="Resource" path="res://resources/default_civilian_profile.tres" id="3_civilian"]
 [ext_resource type="Resource" path="res://resources/default_hostile_profile.tres" id="4_hostile"]
 [ext_resource type="PackedScene" path="res://scenes/HostileProp.tscn" id="5_prop"]
+[ext_resource type="Script" path="res://scripts/visual/npc_visuals.gd" id="6_visual"]
 
 [sub_resource type="CapsuleShape3D" id="NpcShape"]
 radius = 0.32
@@ -15,8 +16,44 @@ radius = 0.32
 height = 1.55
 
 [sub_resource type="StandardMaterial3D" id="NpcMaterial"]
-albedo_color = Color(0.2, 0.48, 0.78, 1)
-roughness = 0.84
+albedo_color = Color(0.12, 0.34, 0.62, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="NpcHeadMaterial"]
+albedo_color = Color(0.62, 0.72, 0.76, 1)
+roughness = 0.52
+
+[sub_resource type="StandardMaterial3D" id="NpcJacketMaterial"]
+albedo_color = Color(0.05, 0.12, 0.22, 1)
+metallic = 0.28
+roughness = 0.46
+
+[sub_resource type="StandardMaterial3D" id="NpcAccentMaterial"]
+albedo_color = Color(0.02, 0.24, 0.31, 1)
+emission_enabled = true
+emission = Color(0.04, 0.72, 0.86, 1)
+emission_energy_multiplier = 1.8
+roughness = 0.3
+
+[sub_resource type="StandardMaterial3D" id="NpcShoesMaterial"]
+albedo_color = Color(0.012, 0.02, 0.035, 1)
+metallic = 0.5
+roughness = 0.42
+
+[sub_resource type="SphereMesh" id="NpcHeadMesh"]
+radius = 0.27
+height = 0.54
+radial_segments = 12
+rings = 6
+
+[sub_resource type="BoxMesh" id="NpcJacketMesh"]
+size = Vector3(0.64, 0.62, 0.42)
+
+[sub_resource type="BoxMesh" id="NpcAccentMesh"]
+size = Vector3(0.38, 0.1, 0.045)
+
+[sub_resource type="BoxMesh" id="NpcShoesMesh"]
+size = Vector3(0.23, 0.18, 0.34)
 
 [sub_resource type="SphereMesh" id="WarningMesh"]
 radius = 0.22
@@ -43,6 +80,31 @@ shape = SubResource("NpcShape")
 position = Vector3(0, 0.78, 0)
 mesh = SubResource("NpcMesh")
 material_override = SubResource("NpcMaterial")
+
+[node name="Jacket" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.86, -0.02)
+mesh = SubResource("NpcJacketMesh")
+material_override = SubResource("NpcJacketMaterial")
+
+[node name="Head" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.62, 0)
+mesh = SubResource("NpcHeadMesh")
+material_override = SubResource("NpcHeadMaterial")
+
+[node name="AccentBar" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.02, -0.235)
+mesh = SubResource("NpcAccentMesh")
+material_override = SubResource("NpcAccentMaterial")
+
+[node name="ShoeLeft" type="MeshInstance3D" parent="."]
+position = Vector3(-0.18, 0.12, -0.04)
+mesh = SubResource("NpcShoesMesh")
+material_override = SubResource("NpcShoesMaterial")
+
+[node name="ShoeRight" type="MeshInstance3D" parent="."]
+position = Vector3(0.18, 0.12, -0.04)
+mesh = SubResource("NpcShoesMesh")
+material_override = SubResource("NpcShoesMaterial")
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
 path_desired_distance = 1.2
@@ -73,3 +135,6 @@ visible = false
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2_health")
 maximum_health = 100.0
+
+[node name="Visuals" type="Node3D" parent="."]
+script = ExtResource("6_visual")

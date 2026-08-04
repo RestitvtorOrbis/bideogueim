@@ -108,7 +108,8 @@ func _test_world_and_vehicle(results: Array[Dictionary]) -> void:
 	vehicle.set("global_position", Vector3(100.0, 8.0, -100.0))
 	vehicle.call("reset_to_nearest_road")
 	var reset_position := vehicle.get("global_position") as Vector3
-	_expect(results, "vehicle reset stays inside district bounds", absf(reset_position.x) <= 72.0 and absf(reset_position.z) <= 72.0 and is_equal_approx(reset_position.y, 1.25))
+	var city_extent := float(district.call("get_city_size")) * 0.5
+	_expect(results, "vehicle reset stays inside district bounds", absf(reset_position.x) <= city_extent and absf(reset_position.z) <= city_extent and is_equal_approx(reset_position.y, 1.25))
 	vehicle.set("linear_velocity", Vector3(100.0, 0.0, 0.0))
 	vehicle.call("_limit_speed")
 	var limited_velocity := vehicle.get("linear_velocity") as Vector3

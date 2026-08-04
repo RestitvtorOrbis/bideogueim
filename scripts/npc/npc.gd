@@ -25,6 +25,8 @@ var _attack_cooldown: float = 0.0
 var _panic_time_left: float = 0.0
 var _disabled_time: float = 0.0
 var _rng := RandomNumberGenerator.new()
+var _visual_profile: NpcProfile
+var _visual_material: StandardMaterial3D
 
 func _ready() -> void:
 	_rng.randomize()
@@ -32,7 +34,8 @@ func _ready() -> void:
 		civilian_profile = load("res://resources/default_civilian_profile.tres") as NpcProfile
 	if hostile_profile == null:
 		hostile_profile = load("res://resources/default_hostile_profile.tres") as NpcProfile
-	health.died.connect(_on_health_died)
+	if health != null and not health.died.is_connected(_on_health_died):
+		health.died.connect(_on_health_died)
 	deactivate()
 
 func activate(
@@ -43,6 +46,9 @@ func activate(
 		player: Node = null
 	) -> void:
 	profile = new_profile if new_profile != null else civilian_profile
+	if profile == null:
+		deactivate()
+		return
 	lifecycle_id = new_lifecycle_id
 	group_id = spawn_group_id
 	target_player = player
@@ -57,19 +63,24 @@ func activate(
 	visible = true
 	collision_layer = 8
 	collision_mask = 5
-	health.configure(profile.maximum_health)
+	if health != null:
+		health.configure(profile.maximum_health)
 	_apply_profile_visuals()
 	if profile.is_hostile():
+		var hostile_service := _get_hostile_group_service()
 		if group_id == &"":
-			group_id = HostileGroupService.create_group()
-		HostileGroupService.register_member(group_id, self)
+			if hostile_service != null:
+				group_id = hostile_service.call("create_group")
+		if group_id != &"" and hostile_service != null:
+			hostile_service.call("register_member", group_id, self)
 	else:
 		group_id = &""
 	_select_wander_target()
 
 func deactivate() -> void:
-	if group_id != &"":
-		HostileGroupService.unregister_member(group_id, self)
+	var hostile_service := _get_hostile_group_service()
+	if group_id != &"" and hostile_service != null:
+		hostile_service.call("unregister_member", group_id, self)
 	active = false
 	impact_eligible = false
 	state = State.INACTIVE
@@ -172,8 +183,6 @@ func _select_wander_target() -> void:
 	var angle := _rng.randf_range(0.0, TAU)
 	var radius := _rng.randf_range(5.0, 22.0)
 	_wander_target = center + Vector3(cos(angle), 0.0, sin(angle)) * radius
-	_wander_target.x = clampf(_wander_target.x, -70.0, 70.0)
-	_wander_target.z = clampf(_wander_target.z, -70.0, 70.0)
 	_wander_target.y = global_position.y
 	_wander_time_left = _rng.randf_range(3.0, 8.0)
 	if navigation_agent != null:
@@ -204,12 +213,16 @@ func receive_vehicle_impact(source: Node, speed: float, impulse: Vector3) -> voi
 	var role_name := "Hostile" if profile != null and profile.is_hostile() else "Civilian"
 	var timestamp := Time.get_ticks_msec() / 1000.0
 	var event := ImpactEvent.new(lifecycle_id, role_name, source, speed, impulse, timestamp, true, false)
-	ImpactBus.emit_impact(event)
+	var impact_bus := get_node_or_null("/root/ImpactBus")
+	if impact_bus != null:
+		impact_bus.call("emit_impact", event)
 	if role_name == "Hostile" and group_id != &"":
-		HostileGroupService.record_impact(group_id, timestamp)
+		var hostile_service := _get_hostile_group_service()
+		if hostile_service != null:
+			hostile_service.call("record_impact", group_id, timestamp)
 
 func apply_damage(amount: float) -> void:
-	if active and state != State.DISABLED:
+	if active and state != State.DISABLED and health != null:
 		health.apply_damage(amount)
 
 func is_disabled_for_recycle() -> bool:
@@ -225,16 +238,21 @@ func is_disabled() -> bool:
 	return state == State.DISABLED
 
 func _apply_profile_visuals() -> void:
-	if profile == null:
+	if profile == null or body_mesh == null:
 		return
-	var material := StandardMaterial3D.new()
-	var palette := profile.material_palette
-	material.albedo_color = palette[0] if not palette.is_empty() else Color.WHITE
-	body_mesh.material_override = material
-	warning_marker.visible = profile.is_hostile() and profile.warning_marker_enabled
-	if warning_marker.visible:
+	if _visual_profile != profile:
+		_visual_material = StandardMaterial3D.new()
+		var palette := profile.material_palette
+		_visual_material.albedo_color = palette[0] if not palette.is_empty() else Color.WHITE
+		_visual_material.roughness = 0.84
+		_visual_profile = profile
+	body_mesh.material_override = _visual_material
+	if warning_marker != null:
+		warning_marker.visible = profile.is_hostile() and profile.warning_marker_enabled
+	if warning_marker != null and warning_marker.visible:
 		warning_marker.modulate = profile.warning_marker_color
-	armed_prop.visible = profile.is_hostile() and profile.equipped_prop_scene != null
+	if armed_prop != null:
+		armed_prop.visible = profile.is_hostile() and profile.equipped_prop_scene != null
 
 func _on_health_died() -> void:
 	if active and state != State.DISABLED:
@@ -243,3 +261,6 @@ func _on_health_died() -> void:
 		_disabled_time = 1.5
 		collision_layer = 0
 		collision_mask = 0
+
+func _get_hostile_group_service() -> Node:
+	return get_node_or_null("/root/HostileGroupService")
