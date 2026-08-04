@@ -586,7 +586,7 @@ Write tests for saving, loading, and malformed high-score data handling.
 - Valid data is restored.
 - Malformed data results in a safe zero value.
 
-#### [ ] T-060 — Create the 250-NPC benchmark scene
+#### [x] T-060 — Create the 250-NPC benchmark scene
 
 Create a headless benchmark scene that maintains 250 NPCs for ten minutes and records frame time, average FPS, peak memory, and pool allocations.
 
