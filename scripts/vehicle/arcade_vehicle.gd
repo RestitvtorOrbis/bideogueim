@@ -19,6 +19,7 @@ func _ready() -> void:
 	if config == null:
 		config = VehicleConfig.new()
 	mass = config.mass
+	angular_damp = 16.0
 	center_of_mass_mode = 1
 	center_of_mass = Vector3(0.0, -0.35, 0.0)
 	contact_monitor = true
@@ -47,7 +48,8 @@ func _physics_process(_delta: float) -> void:
 		return
 
 	var throttle := Input.get_action_strength("accelerate") - Input.get_action_strength("brake_reverse")
-	var steering := Input.get_axis("steer_left", "steer_right")
+	# Positive Y torque turns the vehicle left; steer_left must therefore be positive.
+	var steering := Input.get_axis("steer_right", "steer_left")
 	var forward := -global_transform.basis.z
 	var forward_speed := linear_velocity.dot(forward)
 	if absf(forward_speed) < config.maximum_speed or signf(throttle) != signf(forward_speed):
@@ -57,8 +59,11 @@ func _physics_process(_delta: float) -> void:
 	if Input.is_action_pressed("handbrake"):
 		var lateral := global_transform.basis.x * linear_velocity.dot(global_transform.basis.x)
 		apply_central_force(-lateral * (1.0 - config.handbrake_grip) * mass * 8.0)
-	var steering_torque := steering * deg_to_rad(config.steering_angle_degrees) * maxf(absf(forward_speed), 1.0)
-	apply_torque(Vector3.UP * steering_torque * mass * 0.18)
+	# Drive toward a target yaw rate so steering responds immediately instead of accumulating torque.
+	var speed_ratio := clampf(absf(forward_speed) / maxf(config.maximum_speed, 0.1), 0.0, 1.0)
+	var steering_speed_factor := lerpf(0.35, 1.0, speed_ratio)
+	var target_yaw_rate := steering * 2.8 * steering_speed_factor
+	angular_velocity.y = move_toward(angular_velocity.y, target_yaw_rate, 24.0 * _delta)
 	_apply_coast_drag()
 	_limit_speed()
 	if Input.is_action_just_pressed("reset_vehicle"):

@@ -1,9 +1,10 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/player/third_person_camera.gd" id="2_camera"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="3_health"]
 [ext_resource type="Script" path="res://scripts/visual/player_visuals.gd" id="4_visual"]
+[ext_resource type="PackedScene" path="res://scenes/visuals/characters/HumanCharacterVisual.tscn" id="5_human_visual"]
 
 [sub_resource type="CapsuleShape3D" id="PlayerShape"]
 radius = 0.42
@@ -88,51 +89,63 @@ shape = SubResource("PlayerShape")
 
 [node name="VisualRoot" type="Node3D" parent="."]
 
+[node name="HumanCharacterVisual" parent="VisualRoot" instance=ExtResource("5_human_visual")]
+
 [node name="BodyMesh" type="MeshInstance3D" parent="VisualRoot"]
+visible = false
 position = Vector3(0, 0.9, 0)
 mesh = SubResource("PlayerMesh")
 material_override = SubResource("PlayerMaterial")
 
 [node name="Head" type="MeshInstance3D" parent="VisualRoot"]
+visible = false
 position = Vector3(0, 1.95, 0)
 mesh = SubResource("HeadMesh")
 
 [node name="Visor" type="MeshInstance3D" parent="VisualRoot/Head"]
+visible = false
 position = Vector3(0, 0.02, -0.25)
 mesh = SubResource("VisorMesh")
 material_override = SubResource("VisorMaterial")
 
 [node name="Neck" type="MeshInstance3D" parent="VisualRoot"]
+visible = false
 position = Vector3(0, 1.58, 0)
 mesh = SubResource("NeckMesh")
 material_override = SubResource("ArmorMaterial")
 
 [node name="TorsoArmor" type="MeshInstance3D" parent="VisualRoot"]
+visible = false
 position = Vector3(0, 1.08, -0.04)
 mesh = SubResource("ChestMesh")
 material_override = SubResource("ArmorMaterial")
 
 [node name="ShoulderLeft" type="MeshInstance3D" parent="VisualRoot"]
+visible = false
 position = Vector3(-0.45, 1.38, 0)
 mesh = SubResource("ShoulderMesh")
 material_override = SubResource("ArmorMaterial")
 
 [node name="ShoulderRight" type="MeshInstance3D" parent="VisualRoot"]
+visible = false
 position = Vector3(0.45, 1.38, 0)
 mesh = SubResource("ShoulderMesh")
 material_override = SubResource("ArmorMaterial")
 
 [node name="BootLeft" type="MeshInstance3D" parent="VisualRoot"]
+visible = false
 position = Vector3(-0.2, 0.13, -0.05)
 mesh = SubResource("BootMesh")
 material_override = SubResource("BootMaterial")
 
 [node name="BootRight" type="MeshInstance3D" parent="VisualRoot"]
+visible = false
 position = Vector3(0.2, 0.13, -0.05)
 mesh = SubResource("BootMesh")
 material_override = SubResource("BootMaterial")
 
 [node name="ChestCore" type="MeshInstance3D" parent="VisualRoot"]
+visible = false
 position = Vector3(0, 1.13, -0.295)
 mesh = SubResource("CoreMesh")
 material_override = SubResource("AccentMaterial")

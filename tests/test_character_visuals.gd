@@ -7,6 +7,7 @@ const MALE_BODY_PATH := "res://assets/characters/quaternius/models/Superhero_Mal
 const FEMALE_BODY_PATH := "res://assets/characters/quaternius/models/Superhero_Female_FullBody.gltf"
 const MISSING_MODEL_PATH := "res://assets/characters/quaternius/models/does_not_exist.gltf"
 const MISSING_ACCESSORY_PATH := "res://assets/characters/quaternius/hairstyles/does_not_exist.gltf"
+const MISSING_LOCOMOTION_PATH := "res://assets/characters/quaternius/animations/does_not_exist.glb"
 const AABB_TOLERANCE := 0.0001
 
 const BODY_FIXTURES := [
@@ -40,6 +41,8 @@ func run() -> Array[Dictionary]:
 	_test_shared_palette_materials(results)
 	_test_visual_state_apis(results, visual_scene)
 	_test_hand_lookup_and_accessory_policy(results, visual_scene)
+	_test_locomotion_resources(results, visual_scene)
+	_test_locomotion_failure_statuses(results)
 	return results
 
 
@@ -243,6 +246,74 @@ func _test_hand_lookup_and_accessory_policy(results: Array[Dictionary], visual_s
 	_dispose_visual(visual)
 	_dispose_visual(missing_accessory_visual)
 	_dispose_visual(missing_model_visual)
+
+
+func _test_locomotion_resources(results: Array[Dictionary], visual_scene: PackedScene) -> void:
+	var expected_names: Array[StringName] = [&"Idle_Loop", &"Walk_Loop", &"Jog_Fwd_Loop"]
+	var first := _create_visual(visual_scene)
+	var names := first.get_locomotion_clip_names()
+	_expect(results, "locomotion exposes exactly three public clip names", names == expected_names)
+	var first_animations: Dictionary = {}
+	for clip_name in expected_names:
+		first_animations[String(clip_name)] = first.get_locomotion_animation(clip_name)
+		_expect(results, "locomotion exposes %s" % String(clip_name), first_animations[String(clip_name)] != null)
+	_expect(results, "locomotion cache is ready", first.is_locomotion_ready() and first.get_locomotion_load_status_name() == &"ready")
+	_expect(results, "locomotion cache contains three clips", first.get_locomotion_animation_cache_size() == 3)
+	_expect(results, "locomotion source is loaded once", first.get_locomotion_source_load_count() == 1)
+	var library := first.get_locomotion_animation_library()
+	_expect(results, "locomotion exposes one shared animation library", library != null)
+	var logical_instances: Array[HumanCharacterVisual] = []
+	for index in 250:
+		var logical_visual := HumanCharacterVisual.new()
+		logical_instances.append(logical_visual)
+		_expect(results, "logical locomotion instance %d shares the library" % index, logical_visual.get_locomotion_animation_library() == library)
+		for clip_name in expected_names:
+			var animation := logical_visual.get_locomotion_animation(clip_name)
+			_expect(results, "logical locomotion instance %d shares %s" % [index, String(clip_name)], animation == first_animations[String(clip_name)])
+	for logical_visual in logical_instances:
+		logical_visual.free()
+	_expect(results, "locomotion cache remains bounded after 250 instances", first.get_locomotion_animation_cache_size() == 3 and first.get_locomotion_source_load_count() == 1)
+	_expect(results, "unsupported locomotion clip fails without changing cache", first.get_locomotion_animation(&"Run_Loop") == null and first.get_locomotion_animation_cache_size() == 3)
+	_dispose_visual(first)
+
+
+func _test_locomotion_failure_statuses(results: Array[Dictionary]) -> void:
+	var missing_source := HumanCharacterVisual.inspect_locomotion_source_path(MISSING_LOCOMOTION_PATH)
+	_expect(results, "missing locomotion source has a defined failure", int(missing_source.get("status", -1)) == HumanCharacterVisual.LOCOMOTION_STATUS_MISSING_SOURCE and missing_source.get("animations", {}).is_empty())
+
+	var missing_library_root := Node3D.new()
+	missing_library_root.add_child(Skeleton3D.new())
+	var missing_library := HumanCharacterVisual.inspect_locomotion_source_tree(missing_library_root)
+	_expect(results, "missing locomotion library has a defined failure", int(missing_library.get("status", -1)) == HumanCharacterVisual.LOCOMOTION_STATUS_MISSING_LIBRARY)
+	missing_library_root.free()
+
+	var missing_skeleton_root := _create_locomotion_fixture(false, [&"Idle_Loop", &"Walk_Loop", &"Jog_Fwd_Loop"])
+	var missing_skeleton := HumanCharacterVisual.inspect_locomotion_source_tree(missing_skeleton_root)
+	_expect(results, "missing locomotion skeleton has a defined failure", int(missing_skeleton.get("status", -1)) == HumanCharacterVisual.LOCOMOTION_STATUS_MISSING_SKELETON)
+	missing_skeleton_root.free()
+
+	var missing_clip_root := _create_locomotion_fixture(true, [&"Idle_Loop", &"Walk_Loop"])
+	var missing_clip := HumanCharacterVisual.inspect_locomotion_source_tree(missing_clip_root)
+	_expect(results, "missing locomotion clip has a defined failure", int(missing_clip.get("status", -1)) == HumanCharacterVisual.LOCOMOTION_STATUS_MISSING_CLIP)
+	missing_clip_root.free()
+
+	var complete_fixture := _create_locomotion_fixture(true, [&"Idle_Loop", &"Walk_Loop", &"Jog_Fwd_Loop"])
+	var complete := HumanCharacterVisual.inspect_locomotion_source_tree(complete_fixture)
+	_expect(results, "complete in-memory locomotion source shares its exact three clips", int(complete.get("status", -1)) == HumanCharacterVisual.LOCOMOTION_STATUS_READY and complete.get("animations", {}).size() == 3)
+	complete_fixture.free()
+
+
+func _create_locomotion_fixture(include_skeleton: bool, clip_names: Array[StringName]) -> Node3D:
+	var root := Node3D.new()
+	var player := AnimationPlayer.new()
+	var library := AnimationLibrary.new()
+	for clip_name in clip_names:
+		library.add_animation(clip_name, Animation.new())
+	player.add_animation_library(&"", library)
+	root.add_child(player)
+	if include_skeleton:
+		root.add_child(Skeleton3D.new())
+	return root
 
 
 func _create_visual(visual_scene: PackedScene) -> HumanCharacterVisual:

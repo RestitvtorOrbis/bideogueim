@@ -12,6 +12,7 @@ func run() -> Array[Dictionary]:
 	_test_yaw_alignment(results)
 	_test_input_mappings(results)
 	_test_on_foot_camera_contract(results)
+	_test_player_visual_contract(results)
 	_test_visual_root_hysteresis(results)
 	_test_vehicle_camera_transition(results)
 	_test_runtime_camera_decoupling(results)
@@ -58,9 +59,45 @@ func _test_on_foot_camera_contract(results: Array[Dictionary]) -> void:
 	_expect(results, "on-foot camera starts at -0.20 pitch", is_equal_approx(camera_rig.rotation.x, -0.20))
 	_expect(results, "on-foot camera FOV is 72", is_equal_approx(camera.fov, 72.0))
 	_expect(results, "on-foot camera collision is world-only", spring_arm.collision_mask == 1)
-	_expect(results, "player primitives are under VisualRoot", player.get_node_or_null("VisualRoot/BodyMesh") != null and player.get_node_or_null("VisualRoot/Head/Visor") != null)
+	_expect(results, "player human wrapper is under VisualRoot", player.get_node_or_null("VisualRoot/HumanCharacterVisual") is HumanCharacterVisual)
 	_expect(results, "player root remains visible", player.visible)
 	player.queue_free()
+
+func _test_player_visual_contract(results: Array[Dictionary]) -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		_expect(results, "player visual fixture has a scene tree", false)
+		return
+	var player_a := preload("res://scenes/Player.tscn").instantiate() as CharacterBody3D
+	var player_b := preload("res://scenes/Player.tscn").instantiate() as CharacterBody3D
+	tree.root.add_child(player_a)
+	tree.root.add_child(player_b)
+	var visual_root := player_a.get_node("VisualRoot") as Node3D
+	var human_visual := player_a.get_node_or_null("VisualRoot/HumanCharacterVisual") as HumanCharacterVisual
+	var second_visual := player_b.get_node_or_null("VisualRoot/HumanCharacterVisual") as HumanCharacterVisual
+	_expect(results, "player has exactly one human wrapper", _count_human_visuals(visual_root) == 1)
+	_expect(results, "player wrapper is a direct VisualRoot child", human_visual != null and human_visual.get_parent() == visual_root)
+	if human_visual == null or second_visual == null:
+		_expect(results, "player visual fixture configured", false)
+		player_a.queue_free()
+		player_b.queue_free()
+		return
+
+	var normalized_aabb := human_visual.get_normalized_aabb()
+	_expect(results, "player visual feet are at local Y zero", is_zero_approx(normalized_aabb.position.y))
+	_expect(results, "player visual target height is 1.82", is_equal_approx(normalized_aabb.size.y, 1.82) and is_equal_approx(human_visual.get_target_height(), 1.82))
+	_expect(results, "player visual faces negative Z", human_visual.get_forward_vector().distance_to(Vector3.FORWARD) <= 0.001)
+	_expect(results, "player visual uses fixed deterministic seed", human_visual.get_character_seed() == 17062026 and second_visual.get_character_seed() == 17062026)
+	_expect(results, "player visual uses player role and palette", human_visual.get_role() == &"player" and human_visual.get_palette_id() == &"player" and second_visual.get_palette_id() == &"player")
+	_expect(results, "player visual variant is deterministic", human_visual.get_body_variant_index() == second_visual.get_body_variant_index() and human_visual.get_hairstyle_variant_index() == second_visual.get_hairstyle_variant_index() and human_visual.get_eyebrow_variant_index() == second_visual.get_eyebrow_variant_index())
+	_expect(results, "player accessories remain metadata-only", not human_visual.are_accessories_rendered())
+	_expect(results, "no legacy player mesh is visible", _visible_mesh_count_outside_wrapper(visual_root, human_visual) == 0)
+
+	var collision := player_a.get_node("CollisionShape3D") as CollisionShape3D
+	var capsule := collision.shape as CapsuleShape3D
+	_expect(results, "player collision capsule remains unchanged", capsule != null and is_equal_approx(capsule.radius, 0.42) and is_equal_approx(capsule.height, 1.8) and is_equal_approx(collision.position.y, 0.9))
+	player_a.queue_free()
+	player_b.queue_free()
 
 func _test_visual_root_hysteresis(results: Array[Dictionary]) -> void:
 	var player := preload("res://scenes/Player.tscn").instantiate() as CharacterBody3D
@@ -163,6 +200,20 @@ func _is_vector_close(actual: Vector3, expected: Vector3) -> bool:
 
 func _wrapped_angle_difference(actual: float, expected: float) -> float:
 	return wrapf(actual - expected, -PI, PI)
+
+func _count_human_visuals(node: Node) -> int:
+	var count := 1 if node is HumanCharacterVisual else 0
+	for child in node.get_children():
+		count += _count_human_visuals(child)
+	return count
+
+func _visible_mesh_count_outside_wrapper(node: Node, wrapper: HumanCharacterVisual) -> int:
+	if node == wrapper:
+		return 0
+	var count := 1 if node is MeshInstance3D and (node as MeshInstance3D).visible else 0
+	for child in node.get_children():
+		count += _visible_mesh_count_outside_wrapper(child, wrapper)
+	return count
 
 func _expect(results: Array[Dictionary], name: String, passed: bool) -> void:
 	results.append({"name": name, "passed": passed, "message": "" if passed else "Assertion failed"})

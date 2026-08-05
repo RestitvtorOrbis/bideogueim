@@ -13,6 +13,22 @@ const ANIMATION_TIER_THROTTLED := 1
 const ANIMATION_TIER_FROZEN := 2
 
 const ACCESSORY_RENDER_POLICY := &"deferred_shared_skeleton"
+const LOCOMOTION_SOURCE_PATH := "res://assets/characters/quaternius/animations/locomotion.glb"
+const LOCOMOTION_CLIP_NAMES: Array[StringName] = [
+	&"Idle_Loop",
+	&"Walk_Loop",
+	&"Jog_Fwd_Loop",
+]
+
+const LOCOMOTION_STATUS_UNINITIALIZED := 0
+const LOCOMOTION_STATUS_READY := 1
+const LOCOMOTION_STATUS_MISSING_SOURCE := 2
+const LOCOMOTION_STATUS_INVALID_SOURCE := 3
+const LOCOMOTION_STATUS_MISSING_LIBRARY := 4
+const LOCOMOTION_STATUS_MISSING_SKELETON := 5
+const LOCOMOTION_STATUS_MISSING_CLIP := 6
+const LOCOMOTION_STATUS_AMBIGUOUS_CLIP := 7
+
 const RIGHT_HAND_ALIASES: Array[StringName] = [
 	&"hand_r",
 	&"Hand_R",
@@ -43,6 +59,7 @@ const PALETTE_COLORS: Dictionary = {
 }
 
 const PALETTE_CACHE_META_KEY := &"human_character_palette_material_cache"
+const LOCOMOTION_CACHE_META_KEY := &"human_character_locomotion_animation_cache"
 
 @onready var _model_pivot: Node3D = $ModelPivot
 
@@ -277,6 +294,69 @@ func get_animation_tier() -> int:
 	return _animation_tier
 
 
+func get_locomotion_animation(clip_name: StringName) -> Animation:
+	return get_shared_locomotion_animation(clip_name)
+
+
+func lookup_locomotion_animation(clip_name: StringName) -> Animation:
+	return get_locomotion_animation(clip_name)
+
+
+static func get_shared_locomotion_animation(clip_name: StringName) -> Animation:
+	var normalized_name := _normalize_locomotion_clip_name(clip_name)
+	if normalized_name.is_empty():
+		return null
+	var cache := _get_locomotion_cache()
+	if int(cache.get("status", LOCOMOTION_STATUS_UNINITIALIZED)) != LOCOMOTION_STATUS_READY:
+		return null
+	var animations: Variant = cache.get("animations", {})
+	if not animations is Dictionary:
+		return null
+	return animations.get(String(normalized_name), null) as Animation
+
+
+static func get_locomotion_clip_names() -> Array[StringName]:
+	var names: Array[StringName] = []
+	for clip_name in LOCOMOTION_CLIP_NAMES:
+		names.append(clip_name)
+	return names
+
+
+func get_locomotion_animation_library() -> AnimationLibrary:
+	var cache := _get_locomotion_cache()
+	return cache.get("library", null) as AnimationLibrary
+
+
+func get_locomotion_load_status() -> int:
+	return int(_get_locomotion_cache().get("status", LOCOMOTION_STATUS_UNINITIALIZED))
+
+
+func get_locomotion_load_status_name() -> StringName:
+	return _locomotion_status_name(get_locomotion_load_status())
+
+
+func is_locomotion_ready() -> bool:
+	return get_locomotion_load_status() == LOCOMOTION_STATUS_READY
+
+
+func get_locomotion_animation_cache_size() -> int:
+	var cache := _get_locomotion_cache()
+	var animations: Variant = cache.get("animations", {})
+	return animations.size() if animations is Dictionary else 0
+
+
+func get_locomotion_source_load_count() -> int:
+	return int(_get_locomotion_cache().get("load_count", 0))
+
+
+static func inspect_locomotion_source_path(source_path: String) -> Dictionary:
+	return _load_locomotion_cache(source_path)
+
+
+static func inspect_locomotion_source_tree(source_root: Node) -> Dictionary:
+	return _extract_locomotion_resources(source_root, LOCOMOTION_SOURCE_PATH)
+
+
 func find_right_hand_bone() -> Variant:
 	var skeleton := _find_skeleton(_body_instance)
 	if skeleton == null:
@@ -449,6 +529,167 @@ static func _get_palette_material_cache() -> Dictionary:
 	var new_cache: Dictionary = {}
 	main_loop.set_meta(PALETTE_CACHE_META_KEY, new_cache)
 	return new_cache
+
+
+static func _get_locomotion_cache() -> Dictionary:
+	var main_loop := Engine.get_main_loop()
+	if main_loop == null:
+		return _new_locomotion_cache(LOCOMOTION_SOURCE_PATH, LOCOMOTION_STATUS_UNINITIALIZED)
+	var caches: Dictionary = {}
+	if main_loop.has_meta(LOCOMOTION_CACHE_META_KEY):
+		var cached_value: Variant = main_loop.get_meta(LOCOMOTION_CACHE_META_KEY)
+		if cached_value is Dictionary:
+			caches = cached_value
+	if caches.has(LOCOMOTION_SOURCE_PATH) and caches[LOCOMOTION_SOURCE_PATH] is Dictionary:
+		return caches[LOCOMOTION_SOURCE_PATH] as Dictionary
+	var cache := _load_locomotion_cache(LOCOMOTION_SOURCE_PATH)
+	caches[LOCOMOTION_SOURCE_PATH] = cache
+	main_loop.set_meta(LOCOMOTION_CACHE_META_KEY, caches)
+	return cache
+
+
+static func _load_locomotion_cache(source_path: String) -> Dictionary:
+	var cache := _new_locomotion_cache(source_path, LOCOMOTION_STATUS_UNINITIALIZED)
+	cache["load_count"] = 1
+	if source_path.is_empty() or not ResourceLoader.exists(source_path, "PackedScene"):
+		cache["status"] = LOCOMOTION_STATUS_MISSING_SOURCE
+		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_MISSING_SOURCE)
+		return cache
+
+	var packed_scene := ResourceLoader.load(source_path, "PackedScene") as PackedScene
+	if packed_scene == null:
+		cache["status"] = LOCOMOTION_STATUS_INVALID_SOURCE
+		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_INVALID_SOURCE)
+		return cache
+	var source_root := packed_scene.instantiate()
+	if source_root == null:
+		cache["status"] = LOCOMOTION_STATUS_INVALID_SOURCE
+		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_INVALID_SOURCE)
+		return cache
+	cache = _extract_locomotion_resources(source_root, source_path)
+	source_root.free()
+	cache["load_count"] = 1
+	return cache
+
+
+static func _new_locomotion_cache(source_path: String, status: int) -> Dictionary:
+	return {
+		"source_path": source_path,
+		"status": status,
+		"status_name": _locomotion_status_name(status),
+		"library": null,
+		"library_name": &"",
+		"animations": {},
+		"load_count": 0,
+	}
+
+
+static func _extract_locomotion_resources(source_root: Node, source_path: String) -> Dictionary:
+	var cache := _new_locomotion_cache(source_path, LOCOMOTION_STATUS_UNINITIALIZED)
+	if source_root == null:
+		cache["status"] = LOCOMOTION_STATUS_INVALID_SOURCE
+		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_INVALID_SOURCE)
+		return cache
+
+	var animation_player := _find_animation_player(source_root)
+	if animation_player == null:
+		cache["status"] = LOCOMOTION_STATUS_MISSING_LIBRARY
+		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_MISSING_LIBRARY)
+		return cache
+	var skeleton := _find_skeleton_in_tree(source_root)
+	if skeleton == null:
+		cache["status"] = LOCOMOTION_STATUS_MISSING_SKELETON
+		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_MISSING_SKELETON)
+		return cache
+
+	var matches: Dictionary = {}
+	var matched_library: AnimationLibrary
+	var matched_library_name := &""
+	for library_name in animation_player.get_animation_library_list():
+		var library := animation_player.get_animation_library(StringName(library_name))
+		if library == null:
+			continue
+		for raw_clip_name in library.get_animation_list():
+			var public_clip_name := _normalize_locomotion_clip_name(StringName(raw_clip_name))
+			if public_clip_name.is_empty():
+				continue
+			if matches.has(String(public_clip_name)):
+				cache["status"] = LOCOMOTION_STATUS_AMBIGUOUS_CLIP
+				cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_AMBIGUOUS_CLIP)
+				return cache
+			var animation := library.get_animation(StringName(raw_clip_name))
+			if animation == null:
+				cache["status"] = LOCOMOTION_STATUS_MISSING_CLIP
+				cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_MISSING_CLIP)
+				return cache
+			matches[String(public_clip_name)] = animation
+			matched_library = library
+			matched_library_name = StringName(library_name)
+
+	if matches.size() != LOCOMOTION_CLIP_NAMES.size():
+		cache["status"] = LOCOMOTION_STATUS_MISSING_CLIP
+		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_MISSING_CLIP)
+		return cache
+	cache["status"] = LOCOMOTION_STATUS_READY
+	cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_READY)
+	cache["library"] = matched_library
+	cache["library_name"] = matched_library_name
+	cache["animations"] = matches
+	return cache
+
+
+static func _find_animation_player(node: Node) -> AnimationPlayer:
+	if not is_instance_valid(node):
+		return null
+	if node is AnimationPlayer:
+		return node as AnimationPlayer
+	for child in node.get_children():
+		var player := _find_animation_player(child)
+		if player != null:
+			return player
+	return null
+
+
+static func _find_skeleton_in_tree(node: Node) -> Skeleton3D:
+	if not is_instance_valid(node):
+		return null
+	if node is Skeleton3D:
+		return node as Skeleton3D
+	for child in node.get_children():
+		var skeleton := _find_skeleton_in_tree(child)
+		if skeleton != null:
+			return skeleton
+	return null
+
+
+static func _normalize_locomotion_clip_name(value: StringName) -> StringName:
+	var text := String(value)
+	var slash_index := text.rfind("/")
+	if slash_index >= 0:
+		text = text.substr(slash_index + 1)
+	for clip_name in LOCOMOTION_CLIP_NAMES:
+		if text == String(clip_name):
+			return clip_name
+	return &""
+
+
+static func _locomotion_status_name(status: int) -> StringName:
+	match status:
+		LOCOMOTION_STATUS_READY:
+			return &"ready"
+		LOCOMOTION_STATUS_MISSING_SOURCE:
+			return &"missing_source"
+		LOCOMOTION_STATUS_INVALID_SOURCE:
+			return &"invalid_source"
+		LOCOMOTION_STATUS_MISSING_LIBRARY:
+			return &"missing_library"
+		LOCOMOTION_STATUS_MISSING_SKELETON:
+			return &"missing_skeleton"
+		LOCOMOTION_STATUS_MISSING_CLIP:
+			return &"missing_clip"
+		LOCOMOTION_STATUS_AMBIGUOUS_CLIP:
+			return &"ambiguous_clip"
+	return &"uninitialized"
 
 
 static func _normalize_palette_slot(value: StringName) -> StringName:
