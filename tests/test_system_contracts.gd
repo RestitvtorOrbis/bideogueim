@@ -51,6 +51,7 @@ func _test_resources(results: Array[Dictionary]) -> void:
 	var impact := ImpactEvent.new("contract-life", "Hostile", null, 12.0, Vector3.FORWARD, 4.0)
 	_expect(results, "impact event stores lifecycle contract", impact.npc_id == "contract-life" and impact.npc_role == "Hostile")
 	_expect(results, "impact event stores physical data", is_equal_approx(impact.speed, 12.0) and impact.impulse == Vector3.FORWARD)
+	_expect(results, "impact event defaults remain vehicle-compatible", impact.impact_kind == &"vehicle" and impact.world_position == Vector3.ZERO)
 
 	var violence := ViolenceSettings.new()
 	violence.apply_preset(ViolenceSettings.Preset.FULL)
@@ -127,6 +128,9 @@ func _test_projectile_contracts(results: Array[Dictionary]) -> void:
 	shooter.force_update_transform()
 	interceptor.force_update_transform()
 	var interceptor_health := interceptor.get_node("HealthComponent") as HealthComponent
+	var projectile_events: Array[ImpactEvent] = []
+	var projectile_event_handler := func(event: ImpactEvent) -> void: projectile_events.append(event)
+	ImpactBus.impact_received.connect(projectile_event_handler)
 	var intercepted := projectile_scene.instantiate() as Node3D
 	tree.root.add_child(intercepted)
 	intercepted.call("launch", shooter, shooter.global_position + Vector3.UP * 1.05, Vector3.FORWARD, 3.0, 18.0, 24.0)
@@ -134,7 +138,9 @@ func _test_projectile_contracts(results: Array[Dictionary]) -> void:
 	_expect(results, "NPC sweep retains shooter RID exclusion", npc_query != null and npc_query.exclude.has((shooter as CollisionObject3D).get_rid()))
 	interceptor.call("apply_damage", interceptor_health.maximum_health - 3.0)
 	intercepted.call("_resolve_impact", {"collider": interceptor, "position": interceptor.global_position})
-	_expect(results, "NPC projectile impact reaches apply_damage and death lifecycle", interceptor_health != null and is_zero_approx(interceptor_health.current_health) and bool(interceptor.call("was_killed")))
+	ImpactBus.impact_received.disconnect(projectile_event_handler)
+	_expect(results, "NPC projectile impact applies damage once and reaches death lifecycle", interceptor_health != null and is_zero_approx(interceptor_health.current_health) and bool(interceptor.call("was_killed")))
+	_expect(results, "NPC projectile impact emits explicit projectile position and kind", projectile_events.size() == 1 and projectile_events[0].impact_kind == &"projectile" and projectile_events[0].world_position == interceptor.global_position)
 	_expect(results, "intervening NPC impact terminates the projectile", not bool(intercepted.get("is_active")))
 	intercepted.queue_free()
 	shooter.queue_free()
@@ -419,10 +425,14 @@ func _test_effects_and_ui(results: Array[Dictionary]) -> void:
 	var decal_pool: Array = effects.get("_decal_pool")
 	var fragment_pool: Array = effects.get("_fragment_pool")
 	var audio_pool: Array = effects.get("_audio_pool")
+	var blood_hit_pool: Array = effects.get("_blood_hit_pool")
+	var decal_meshes: Array = effects.get("_decal_meshes")
 	_expect(results, "impact particle pool has a hard limit", particle_pool.size() == 24)
 	_expect(results, "impact decal pool has a hard limit", decal_pool.size() == 32)
 	_expect(results, "impact fragment pool has a hard limit", fragment_pool.size() == 48)
 	_expect(results, "impact audio pool has a hard limit", audio_pool.size() == 8)
+	_expect(results, "animated blood-hit pool has a hard limit", blood_hit_pool.size() == 24)
+	_expect(results, "retained Kenney splats share three decal meshes", decal_meshes.size() == 3)
 	var source := Node3D.new()
 	tree.root.add_child(source)
 	var impact := ImpactEvent.new("effect-life", "Hostile", source, 12.0, Vector3.FORWARD, 1.0)
@@ -442,6 +452,14 @@ func _test_effects_and_ui(results: Array[Dictionary]) -> void:
 			full_particles = true
 		break
 	_expect(results, "full preset emits impact particles", full_particles)
+	var projectile_particle_index := int(effects.get("_particle_cursor"))
+	var projectile_impact := ImpactEvent.new("effect-projectile", "Hostile", source, 12.0, Vector3.FORWARD, 2.0, true, false, Vector3(1.0, 0.5, 0.0), &"projectile")
+	effects.call("_on_impact", projectile_impact)
+	var projectile_particle_amount := int(particle_pool[projectile_particle_index].amount)
+	var vehicle_particle_index := int(effects.get("_particle_cursor"))
+	effects.call("_on_impact", impact)
+	var vehicle_particle_amount := int(particle_pool[vehicle_particle_index].amount)
+	_expect(results, "full vehicle gore uses a heavier particle burst than projectile gore", vehicle_particle_amount > projectile_particle_amount)
 	var full_decals := false
 	for decal in decal_pool:
 		if decal.visible:

@@ -40,6 +40,8 @@ func run() -> Array[Dictionary]:
 	_test_reconfiguration_replaces_root(results, visual_scene)
 	_test_invalid_configurations_clear_state(results, visual_scene)
 	_test_catalog_configuration(results, visual_scene)
+	_test_outfit_details(results, visual_scene)
+	_test_outfit_bone_attachment_fallback(results, visual_scene)
 	_test_shared_palette_materials(results)
 	_test_visual_state_apis(results, visual_scene)
 	_test_hand_lookup_and_accessory_policy(results, visual_scene)
@@ -153,6 +155,54 @@ func _test_catalog_configuration(results: Array[Dictionary], visual_scene: Packe
 	_dispose_visual(first)
 	_dispose_visual(second)
 	_dispose_visual(player)
+
+
+func _test_outfit_details(results: Array[Dictionary], visual_scene: PackedScene) -> void:
+	var catalog := load(CATALOG_RESOURCE_PATH) as HumanCharacterCatalog
+	if catalog == null:
+		return
+	var first := _create_visual(visual_scene)
+	var second := _create_visual(visual_scene)
+	var first_configured := first.configure_from_catalog(catalog, "outfit-seed-7", &"hostile", 1.78)
+	var second_configured := second.configure_from_catalog(catalog, "outfit-seed-7", &"hostile", 1.78)
+	_expect(results, "configured visual creates a torso clothing layer", first_configured and first.has_outfit_torso() and first.get_outfit_torso_node().mesh != null)
+	_expect(results, "configured visual creates a deterministic detail variant", first_configured and first.has_outfit_detail() and first.get_outfit_detail_variant() == second.get_outfit_detail_variant() and first.get_outfit_detail_name() == second.get_outfit_detail_name())
+	_expect(results, "outfit geometry reuses shared meshes and materials", first_configured and first.get_outfit_torso_node().mesh == second.get_outfit_torso_node().mesh and first.get_outfit_torso_node().material_override == second.get_outfit_torso_node().material_override)
+	var variants: Dictionary = {}
+	for seed in range(12):
+		var visual := _create_visual(visual_scene)
+		if visual.configure_from_catalog(catalog, seed, &"civilian", 1.70):
+			variants[visual.get_outfit_detail_name()] = true
+			_expect(results, "outfit seed %d has one torso and detail node" % seed, visual.has_outfit_torso() and visual.has_outfit_detail())
+		_dispose_visual(visual)
+	_expect(results, "deterministic outfit selection exposes at least three details", variants.size() >= 3)
+	if first_configured:
+		first.set_visibility_tier(HumanCharacterVisual.VISIBILITY_TIER_REDUCED)
+		_expect(results, "reduced visual tier hides nonessential outfit detail", first.get_outfit_torso_node().visible and not first.get_outfit_detail_node().visible)
+		first.set_visibility_tier(HumanCharacterVisual.VISIBILITY_TIER_HIDDEN)
+		_expect(results, "hidden visual tier hides all outfit geometry", not first.get_outfit_torso_node().visible and not first.get_outfit_detail_node().visible)
+	_dispose_visual(first)
+	_dispose_visual(second)
+
+
+func _test_outfit_bone_attachment_fallback(results: Array[Dictionary], visual_scene: PackedScene) -> void:
+	var attached := _create_outfit_skeleton_fixture(visual_scene, true)
+	var torso_attachment := attached.get_outfit_torso_attachment()
+	var torso := attached.get_outfit_torso_node()
+	_expect(results, "torso clothing attaches to a matching spine bone", torso_attachment != null and torso_attachment.get_parent() is Skeleton3D and torso_attachment.bone_name == &"spine" and torso.get_parent() == torso_attachment)
+	var previous_attachment := torso_attachment
+	attached.call("_configure_outfit")
+	_expect(results, "torso bone attachment is replaced cleanly on reconfiguration", not is_instance_valid(previous_attachment) and attached.get_outfit_torso_attachment() != null)
+	attached.set_visibility_tier(HumanCharacterVisual.VISIBILITY_TIER_REDUCED)
+	_expect(results, "reduced tier keeps the attached torso visible", attached.get_outfit_torso_node().visible and attached.get_outfit_torso_attachment().visible)
+	attached.set_visibility_tier(HumanCharacterVisual.VISIBILITY_TIER_HIDDEN)
+	_expect(results, "hidden tier hides the attached torso and attachment", not attached.get_outfit_torso_node().visible and not attached.get_outfit_torso_attachment().visible)
+	_dispose_visual(attached)
+
+	var fallback := _create_outfit_skeleton_fixture(visual_scene, false)
+	var fallback_torso := fallback.get_outfit_torso_node()
+	_expect(results, "torso clothing survives without a matching bone", fallback.has_outfit_torso() and fallback_torso.get_parent() != null and fallback_torso.get_parent().name == &"SharedLowPolyOutfit" and fallback.get_outfit_torso_attachment() == null)
+	_dispose_visual(fallback)
 
 
 func _test_shared_palette_materials(results: Array[Dictionary]) -> void:
@@ -401,6 +451,27 @@ func _create_locomotion_fixture(include_skeleton: bool, clip_names: Array[String
 	if include_skeleton:
 		root.add_child(Skeleton3D.new())
 	return root
+
+
+func _create_outfit_skeleton_fixture(visual_scene: PackedScene, expose_spine: bool) -> HumanCharacterVisual:
+	var visual := _create_visual(visual_scene)
+	var model_pivot := visual.get_node("ModelPivot") as Node3D
+	var body := Node3D.new()
+	body.name = "OutfitFixtureBody"
+	var skeleton := Skeleton3D.new()
+	skeleton.name = "OutfitFixtureSkeleton"
+	if expose_spine:
+		skeleton.add_bone("spine")
+	body.add_child(skeleton)
+	model_pivot.add_child(body)
+	visual.set("_body_instance", body)
+	visual.set("_target_height", 1.70)
+	visual.set("_uniform_scale", 1.0)
+	visual.set("_character_seed", 7)
+	visual.set("_role", &"civilian")
+	visual.set("_palette_id", &"civilian")
+	visual.call("_configure_outfit")
+	return visual
 
 
 func _create_visual(visual_scene: PackedScene) -> HumanCharacterVisual:

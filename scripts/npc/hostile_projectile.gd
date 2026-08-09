@@ -105,8 +105,12 @@ func _resolve_impact(hit: Dictionary) -> void:
 	is_active = false
 	var collider := hit.get("collider") as Node
 	var receiver := _resolve_damage_receiver(collider)
-	if receiver != null and receiver.has_method("apply_damage") and damage > 0.0:
-		receiver.call("apply_damage", damage)
+	var hit_position: Vector3 = hit.get("position", global_position)
+	if receiver != null and damage > 0.0:
+		if receiver.has_method("receive_projectile_impact"):
+			receiver.call("receive_projectile_impact", self, hit_position, speed, fired_direction * speed, damage)
+		elif receiver.has_method("apply_damage"):
+			receiver.call("apply_damage", damage)
 	_show_impact_flash()
 	impacted.emit(global_position, collider)
 

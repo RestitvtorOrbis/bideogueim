@@ -67,6 +67,7 @@ const PALETTE_COLORS: Dictionary = {
 }
 
 const PALETTE_CACHE_META_KEY := &"human_character_palette_material_cache"
+const OUTFIT_CACHE_META_KEY := &"human_character_outfit_resource_cache"
 const LOCOMOTION_CACHE_META_KEY := &"human_character_locomotion_animation_cache"
 const UAL2_CACHE_META_KEY := &"human_character_ual2_animation_cache"
 
@@ -89,6 +90,13 @@ var _selected_hairstyle_path := ""
 var _selected_eyebrow_path := ""
 var _selected_hairstyle_scene: PackedScene
 var _selected_eyebrow_scene: PackedScene
+var _outfit_root: Node3D
+var _outfit_torso: MeshInstance3D
+var _outfit_torso_attachment: BoneAttachment3D
+var _outfit_detail: MeshInstance3D
+var _outfit_detail_attachment: BoneAttachment3D
+var _outfit_detail_variant := -1
+var _outfit_detail_name: StringName = &""
 
 var _visibility_tier := VISIBILITY_TIER_FULL
 var _motion_speed := 0.0
@@ -146,6 +154,7 @@ func configure_body(path: String, height: float, source_positive_z := true) -> b
 	_forward_vector = (model_pivot.basis * source_forward).normalized()
 	_apply_visibility_tier()
 	_setup_animation_playback()
+	_configure_outfit()
 	return true
 
 
@@ -177,6 +186,7 @@ func configure_from_catalog(catalog: HumanCharacterCatalog, seed: Variant, role:
 	_eyebrow_variant_index = CATALOG_SCRIPT.variant_index(normalized_seed, catalog.eyebrow_paths.size(), 17)
 	_select_accessory(catalog.hairstyle_paths, _hairstyle_variant_index, true)
 	_select_accessory(catalog.eyebrow_paths, _eyebrow_variant_index, false)
+	_configure_outfit()
 	_apply_palette_materials()
 	_update_locomotion_playback()
 	return true
@@ -252,6 +262,41 @@ func get_accessory_render_policy() -> StringName:
 
 func are_accessories_rendered() -> bool:
 	return false
+
+
+func get_outfit_detail_variant() -> int:
+	return _outfit_detail_variant
+
+
+func get_outfit_detail_name() -> StringName:
+	return _outfit_detail_name
+
+
+func has_outfit_torso() -> bool:
+	return is_instance_valid(_outfit_torso)
+
+
+func has_outfit_detail() -> bool:
+	return is_instance_valid(_outfit_detail)
+
+
+func get_outfit_torso_node() -> MeshInstance3D:
+	return _outfit_torso
+
+
+func get_outfit_torso_attachment() -> BoneAttachment3D:
+	return _outfit_torso_attachment
+
+
+func get_outfit_detail_node() -> MeshInstance3D:
+	return _outfit_detail
+
+
+static func get_outfit_resource_cache_size() -> int:
+	var cache := _get_outfit_resource_cache()
+	var meshes: Variant = cache.get("meshes", {})
+	var materials: Variant = cache.get("materials", {})
+	return (meshes.size() if meshes is Dictionary else 0) + (materials.size() if materials is Dictionary else 0)
 
 
 static func get_cached_palette_material(palette_id: StringName, variant: int, slot: StringName) -> StandardMaterial3D:
@@ -584,6 +629,7 @@ func get_right_hand_bone_index() -> int:
 
 
 func _clear_body() -> void:
+	_clear_outfit_nodes()
 	_animation_player = null
 	_selected_animation_clip = &""
 	_selected_animation_library = &""
@@ -609,6 +655,8 @@ func _clear_body() -> void:
 	_selected_eyebrow_path = ""
 	_selected_hairstyle_scene = null
 	_selected_eyebrow_scene = null
+	_outfit_detail_variant = -1
+	_outfit_detail_name = &""
 	_visibility_tier = VISIBILITY_TIER_FULL
 	_motion_speed = 0.0
 	_animation_tier = ANIMATION_TIER_NORMAL
@@ -678,6 +726,175 @@ func _apply_palette_materials() -> void:
 			)
 			if palette_material != null:
 				mesh_instance.set_surface_override_material(surface_index, palette_material)
+
+
+func _configure_outfit() -> void:
+	_clear_outfit_nodes()
+	var model_pivot := _get_model_pivot()
+	if model_pivot == null or not is_instance_valid(_body_instance):
+		return
+	_outfit_root = Node3D.new()
+	_outfit_root.name = "SharedLowPolyOutfit"
+	model_pivot.add_child(_outfit_root)
+	var variant := CATALOG_SCRIPT.variant_index(_character_seed, 3, 29)
+	_outfit_detail_variant = maxi(0, variant)
+	var torso := _make_outfit_mesh(
+		"TorsoVestJacket",
+		"torso",
+		_get_outfit_material("torso"),
+		Vector3(0.56, 0.72, 0.34)
+	)
+	_outfit_torso_attachment = _add_outfit_node_to_bone_or_fallback(
+		torso,
+		[&"spine", &"Spine", &"chest", &"Chest", &"upper_body", &"spine_01"],
+		Vector3(0.0, _target_height * 0.54, 0.0),
+		Vector3.ZERO,
+		&"OutfitTorsoBoneAttachment"
+	)
+	_outfit_torso = torso
+
+	var detail: MeshInstance3D
+	var bone_aliases: Array[StringName]
+	var fallback_position := Vector3.ZERO
+	var bone_offset := Vector3.ZERO
+	match _outfit_detail_variant:
+		0:
+			_outfit_detail_name = &"cap"
+			detail = _make_outfit_mesh("DetailCap", "cap", _get_outfit_material("detail"), Vector3(0.46, 0.13, 0.40))
+			bone_aliases = [&"head", &"Head", &"head_end"]
+			fallback_position = Vector3(0.0, _target_height * 0.96, 0.0)
+			bone_offset = Vector3(0.0, 0.12, 0.0)
+		1:
+			_outfit_detail_name = &"glasses"
+			detail = _make_outfit_mesh("DetailGlasses", "glasses", _get_outfit_material("detail"), Vector3(0.38, 0.055, 0.035))
+			bone_aliases = [&"head", &"Head", &"neck"]
+			fallback_position = Vector3(0.0, _target_height * 0.83, -0.24)
+			bone_offset = Vector3(0.0, 0.02, -0.16)
+		_:
+			_outfit_detail_name = &"backpack"
+			detail = _make_outfit_mesh("DetailBackpack", "backpack", _get_outfit_material("detail"), Vector3(0.40, 0.48, 0.18))
+			bone_aliases = [&"spine", &"Spine", &"chest", &"Chest", &"upper_body"]
+			fallback_position = Vector3(0.0, _target_height * 0.56, 0.22)
+			bone_offset = Vector3(0.0, -0.10, 0.16)
+	_outfit_detail_attachment = _add_outfit_node_to_bone_or_fallback(
+		detail,
+		bone_aliases,
+		fallback_position,
+		bone_offset,
+		&"OutfitDetailBoneAttachment"
+	)
+	_outfit_detail = detail
+	_apply_visibility_tier()
+
+
+func _clear_outfit_nodes() -> void:
+	if is_instance_valid(_outfit_torso_attachment):
+		_outfit_torso_attachment.free()
+		_outfit_torso_attachment = null
+	if is_instance_valid(_outfit_detail_attachment):
+		_outfit_detail_attachment.free()
+	_outfit_detail_attachment = null
+	if is_instance_valid(_outfit_root):
+		_outfit_root.free()
+	_outfit_root = null
+	_outfit_torso = null
+	_outfit_detail = null
+	_outfit_detail_variant = -1
+	_outfit_detail_name = &""
+
+
+func _make_outfit_mesh(
+		node_name: String,
+		mesh_key: String,
+		material: StandardMaterial3D,
+		size: Vector3
+	) -> MeshInstance3D:
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = node_name
+	mesh_instance.mesh = _get_outfit_mesh(mesh_key, size)
+	mesh_instance.material_override = material
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mesh_instance
+
+
+func _get_outfit_mesh(mesh_key: String, size: Vector3) -> Mesh:
+	var cache := _get_outfit_resource_cache()
+	var meshes: Dictionary = cache.get("meshes", {})
+	if meshes.has(mesh_key):
+		return meshes[mesh_key] as Mesh
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	mesh.resource_name = "HumanOutfitMesh_%s" % mesh_key
+	meshes[mesh_key] = mesh
+	cache["meshes"] = meshes
+	return mesh
+
+
+func _get_outfit_material(slot: String) -> StandardMaterial3D:
+	var cache := _get_outfit_resource_cache()
+	var materials: Dictionary = cache.get("materials", {})
+	var key := "%s|%s|%d" % [String(_palette_id), slot, _outfit_detail_variant if _outfit_detail_variant >= 0 else 0]
+	if materials.has(key):
+		return materials[key] as StandardMaterial3D
+	var material := StandardMaterial3D.new()
+	var palette := _palette_color(_normalize_palette_id(_palette_id), &"body")
+	if slot == "detail":
+		palette = _palette_color(_normalize_palette_id(_palette_id), &"accent")
+	else:
+		palette = palette.darkened(0.18 + float(maxi(0, _outfit_detail_variant)) * 0.04)
+	material.resource_name = "HumanOutfitMaterial_%s" % key.replace("|", "_")
+	material.albedo_color = palette
+	material.roughness = 0.78
+	materials[key] = material
+	cache["materials"] = materials
+	return material
+
+
+func _add_outfit_node_to_bone_or_fallback(
+		outfit_node: MeshInstance3D,
+		bone_aliases: Array[StringName],
+		fallback_position: Vector3,
+		bone_offset: Vector3,
+		attachment_name: StringName
+	) -> BoneAttachment3D:
+	var descriptor := _find_bone_descriptor(bone_aliases)
+	if not descriptor.is_empty():
+		var attachment := BoneAttachment3D.new()
+		attachment.name = attachment_name
+		attachment.bone_name = StringName(descriptor.get("bone_name", &""))
+		var skeleton := descriptor.get("skeleton") as Skeleton3D
+		if skeleton != null:
+			skeleton.add_child(attachment)
+			attachment.add_child(outfit_node)
+			outfit_node.position = bone_offset / maxf(_uniform_scale, MIN_HEIGHT)
+			outfit_node.scale = Vector3.ONE / maxf(_uniform_scale, MIN_HEIGHT)
+			return attachment
+	_outfit_root.add_child(outfit_node)
+	_place_outfit_node(outfit_node, fallback_position)
+	return null
+
+
+func _place_outfit_node(node: Node3D, world_position: Vector3) -> void:
+	var model_pivot := _get_model_pivot()
+	if model_pivot == null:
+		return
+	node.position = model_pivot.transform.affine_inverse() * world_position
+	node.scale = Vector3.ONE / maxf(_uniform_scale, MIN_HEIGHT)
+
+
+func _find_bone_descriptor(aliases: Array[StringName]) -> Dictionary:
+	var skeleton := _find_skeleton(_body_instance)
+	if skeleton == null:
+		return {}
+	for alias in aliases:
+		var bone_index := skeleton.find_bone(String(alias))
+		if bone_index >= 0:
+			return {
+				"skeleton": skeleton,
+				"bone_index": bone_index,
+				"bone_name": StringName(skeleton.get_bone_name(bone_index)),
+			}
+	return {}
 
 
 func _find_mesh_instances(node: Node) -> Array[MeshInstance3D]:
@@ -755,6 +972,14 @@ func _apply_visibility_tier() -> void:
 	var model_pivot := _get_model_pivot()
 	if model_pivot != null:
 		model_pivot.visible = _visibility_tier != VISIBILITY_TIER_HIDDEN
+	if is_instance_valid(_outfit_torso):
+		_outfit_torso.visible = _visibility_tier != VISIBILITY_TIER_HIDDEN
+	if is_instance_valid(_outfit_torso_attachment):
+		_outfit_torso_attachment.visible = _visibility_tier != VISIBILITY_TIER_HIDDEN
+	if is_instance_valid(_outfit_detail):
+		_outfit_detail.visible = _visibility_tier == VISIBILITY_TIER_FULL
+	if is_instance_valid(_outfit_detail_attachment):
+		_outfit_detail_attachment.visible = _visibility_tier == VISIBILITY_TIER_FULL
 
 
 func _normalize_visibility_tier(value: Variant) -> int:
@@ -802,6 +1027,19 @@ static func _get_palette_material_cache() -> Dictionary:
 			return cache
 	var new_cache: Dictionary = {}
 	main_loop.set_meta(PALETTE_CACHE_META_KEY, new_cache)
+	return new_cache
+
+
+static func _get_outfit_resource_cache() -> Dictionary:
+	var main_loop := Engine.get_main_loop()
+	if main_loop == null:
+		return {"meshes": {}, "materials": {}}
+	if main_loop.has_meta(OUTFIT_CACHE_META_KEY):
+		var cache: Variant = main_loop.get_meta(OUTFIT_CACHE_META_KEY)
+		if cache is Dictionary:
+			return cache
+	var new_cache := {"meshes": {}, "materials": {}}
+	main_loop.set_meta(OUTFIT_CACHE_META_KEY, new_cache)
 	return new_cache
 
 

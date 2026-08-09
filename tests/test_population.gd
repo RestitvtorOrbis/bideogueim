@@ -38,6 +38,7 @@ func run() -> Array[Dictionary]:
 	_test_safe_radius_behavior(results)
 	_test_civilian_roaming_anchors(results)
 	_test_visual_distance_tiers(results)
+	_test_visibility_activation_contract(results)
 	_test_recycling_and_pool_reuse(results)
 	return results
 
@@ -461,6 +462,22 @@ func _test_visual_distance_tiers(results: Array[Dictionary]) -> void:
 	_expect(results, "pool reuse resets visual tier to full and normal", reused == npc and reused.call("get_visual_tier") == 0 and reused_visual.get_visibility_tier() == HumanCharacterVisual.VISIBILITY_TIER_FULL and reused_visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_NORMAL and (reused_visual.get_node("ModelPivot") as Node3D).visible)
 	civilian_pool.release(reused)
 	_cleanup_fixture(fixture)
+
+
+func _test_visibility_activation_contract(results: Array[Dictionary]) -> void:
+	var manager := preload("res://scripts/npc/population_manager.gd").new() as Node
+	_expect(results, "NPC movement includes the exact 20m boundary", bool(manager.call("can_npc_move", 20.0, false, false, false)))
+	_expect(results, "NPC movement rejects missing-camera far entries", not bool(manager.call("can_npc_move", 20.001, false, true, true)))
+	_expect(results, "NPC movement accepts an unobstructed visible far entry", bool(manager.call("can_npc_move", 20.001, true, true, true)))
+	_expect(results, "NPC movement rejects an occluded visible far entry", not bool(manager.call("can_npc_move", 20.001, true, true, false)))
+	var visibility_refresh_seconds := float(manager.call("get_visibility_refresh_seconds", 250, 60.0))
+	_expect(results, "250-NPC outside-radius visibility refresh stays within the 0.25s stale limit", visibility_refresh_seconds <= 0.25)
+	_expect(results, "250-NPC visibility cadence uses a deterministic bounded round", is_equal_approx(visibility_refresh_seconds, 13.0 / 60.0))
+	var visibility_cache: Dictionary = manager.get("_visibility_cache")
+	visibility_cache[manager] = {"unobstructed": true, "timestamp": 0.0}
+	manager.call("_clear_visibility_cache")
+	_expect(results, "visibility cache clear removes released/reconfigured entries", int(manager.call("get_visibility_cache_size")) == 0)
+	manager.free()
 
 func _live_projectile_count() -> int:
 	var count := 0

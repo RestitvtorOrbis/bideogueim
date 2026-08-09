@@ -675,7 +675,18 @@ func receive_vehicle_impact(source: Node, speed: float, impulse: Vector3) -> voi
 	velocity = impulse.normalized() * minf(speed * 0.35, 18.0) if impulse.length() > 0.01 else Vector3.ZERO
 	var role_name := "Hostile" if profile != null and profile.is_hostile() else "Civilian"
 	var timestamp := Time.get_ticks_msec() / 1000.0
-	var event := ImpactEvent.new(lifecycle_id, role_name, source, speed, impulse, timestamp, true, false)
+	var event := ImpactEvent.new(
+		lifecycle_id,
+		role_name,
+		source,
+		speed,
+		impulse,
+		timestamp,
+		true,
+		false,
+		global_position,
+		&"vehicle"
+	)
 	var impact_bus := get_node_or_null("/root/ImpactBus")
 	if impact_bus != null:
 		impact_bus.call("emit_impact", event)
@@ -683,6 +694,34 @@ func receive_vehicle_impact(source: Node, speed: float, impulse: Vector3) -> voi
 		var hostile_service := _get_hostile_group_service()
 		if hostile_service != null:
 			hostile_service.call("record_impact", group_id, timestamp)
+
+func receive_projectile_impact(
+		source: Node,
+		hit_position: Vector3,
+		projectile_speed: float,
+		impulse: Vector3,
+		amount: float
+	) -> void:
+	if not active or state == State.DISABLED or health == null or amount <= 0.0:
+		return
+	health.apply_damage(amount)
+	var role_name := "Hostile" if profile != null and profile.is_hostile() else "Civilian"
+	var timestamp := Time.get_ticks_msec() / 1000.0
+	var event := ImpactEvent.new(
+		lifecycle_id,
+		role_name,
+		source,
+		projectile_speed,
+		impulse,
+		timestamp,
+		true,
+		false,
+		hit_position,
+		&"projectile"
+	)
+	var impact_bus := get_node_or_null("/root/ImpactBus")
+	if impact_bus != null:
+		impact_bus.call("emit_impact", event)
 
 func apply_damage(amount: float) -> void:
 	if active and state != State.DISABLED and health != null:

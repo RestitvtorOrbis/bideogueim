@@ -2,6 +2,11 @@ extends Node3D
 
 const SPAWN_ANGULAR_SECTOR_COUNT := 8
 const SPAWN_RADIAL_BAND_COUNT := 2
+const NPC_MOVEMENT_ACTIVATION_RADIUS := 20.0
+const OUTSIDE_RADIUS_VISIBILITY_BUDGET := 20
+const OUTSIDE_RADIUS_VISIBILITY_MAX_STALE := 0.25
+const NPC_REPRESENTATIVE_HEIGHT := 1.0
+const WORLD_COLLISION_LAYER := 1
 
 @export var crowd_settings: CrowdSettings
 @export var civilian_profile: NpcProfile
@@ -31,6 +36,8 @@ var _initial_spawned_count: int = 0
 var _initial_visible_slots_used: int = 0
 var _configured: bool = false
 var _elapsed_since_configure: float = 0.0
+var _visibility_cache: Dictionary = {}
+var _visibility_cursor: int = 0
 var _pending_death_replacements: Dictionary = {
 	"civilian": 0,
 	"hostile": 0,
@@ -66,6 +73,7 @@ func configure(world: Node3D, player: Node, settings: CrowdSettings = null) -> v
 	_mid_clock = 0.0
 	_far_clock = 0.0
 	_elapsed_since_configure = 0.0
+	_clear_visibility_cache()
 	_clear_pending_death_replacements()
 	_configured = _district != null and _player != null and crowd_settings != null
 	if not _configured:
@@ -104,8 +112,9 @@ func _physics_process(delta: float) -> void:
 	var player_node := _player as Node3D
 	if player_node == null:
 		return
+	_refresh_outside_radius_visibility(delta)
 	for npc in _active_npcs.keys():
-		if not is_instance_valid(npc) or not npc.has_method("tick"):
+		if not is_instance_valid(npc):
 			continue
 		var npc_node := npc as Node3D
 		if npc_node == null:
@@ -121,6 +130,11 @@ func _physics_process(delta: float) -> void:
 				crowd_settings.mid_ai_distance,
 				crowd_settings.visual_hide_distance
 			)
+		var horizontal_distance := _horizontal_distance_to_player(npc_node.global_position, player_node)
+		if not _can_npc_move(npc, horizontal_distance):
+			continue
+		if not npc.has_method("tick"):
+			continue
 		if distance <= crowd_settings.full_ai_distance:
 			npc.call("tick", delta, true)
 		elif distance <= crowd_settings.mid_ai_distance:
@@ -491,13 +505,100 @@ func _is_separated_from_active(position: Vector3) -> bool:
 	return true
 
 func _is_in_active_camera_frustum(world_position: Vector3) -> bool:
-	var camera := get_viewport().get_camera_3d()
+	var camera := _get_active_camera()
 	if camera == null:
 		return false
 	if camera.is_position_behind(world_position):
 		return false
 	var screen_position := camera.unproject_position(world_position)
 	return get_viewport().get_visible_rect().grow(24.0).has_point(screen_position)
+
+func can_npc_move(horizontal_distance: float, has_camera: bool, in_frustum: bool, unobstructed: bool) -> bool:
+	return horizontal_distance <= NPC_MOVEMENT_ACTIVATION_RADIUS or (has_camera and in_frustum and unobstructed)
+
+
+func get_visibility_refresh_seconds(npc_cap: int, frame_rate: float) -> float:
+	if npc_cap <= 0 or frame_rate <= 0.0:
+		return 0.0
+	return ceil(float(npc_cap) / float(OUTSIDE_RADIUS_VISIBILITY_BUDGET)) / frame_rate
+
+func _can_npc_move(npc: Node, horizontal_distance: float) -> bool:
+	if horizontal_distance <= NPC_MOVEMENT_ACTIVATION_RADIUS:
+		return true
+	var camera := _get_active_camera()
+	if camera == null or not is_instance_valid(npc):
+		return false
+	var npc_node := npc as Node3D
+	if npc_node == null:
+		return false
+	var representative_point := npc_node.global_position + Vector3.UP * NPC_REPRESENTATIVE_HEIGHT
+	if not _is_in_active_camera_frustum(representative_point):
+		_visibility_cache.erase(npc)
+		return false
+	var cached: Variant = _visibility_cache.get(npc, null)
+	if not cached is Dictionary:
+		return false
+	if _elapsed_since_configure - float(cached.get("timestamp", -INF)) > OUTSIDE_RADIUS_VISIBILITY_MAX_STALE:
+		return false
+	return can_npc_move(horizontal_distance, true, true, bool(cached.get("unobstructed", false)))
+
+func _refresh_outside_radius_visibility(_delta: float) -> void:
+	var camera := _get_active_camera()
+	if camera == null:
+		_clear_visibility_cache()
+		return
+	var far_npcs: Array[Node] = []
+	for npc in _active_npcs.keys():
+		if not is_instance_valid(npc):
+			_visibility_cache.erase(npc)
+			continue
+		var npc_node := npc as Node3D
+		if npc_node == null:
+			_visibility_cache.erase(npc)
+			continue
+		var player_node := _player as Node3D
+		if player_node == null:
+			continue
+		if _horizontal_distance_to_player(npc_node.global_position, player_node) > NPC_MOVEMENT_ACTIVATION_RADIUS:
+			far_npcs.append(npc)
+		else:
+			_visibility_cache.erase(npc)
+	if far_npcs.is_empty():
+		_visibility_cursor = 0
+		return
+	_visibility_cursor = posmod(_visibility_cursor, far_npcs.size())
+	var checks := mini(OUTSIDE_RADIUS_VISIBILITY_BUDGET, far_npcs.size())
+	for offset in range(checks):
+		var npc: Node = far_npcs[(_visibility_cursor + offset) % far_npcs.size()]
+		var npc_node := npc as Node3D
+		var representative_point := npc_node.global_position + Vector3.UP * NPC_REPRESENTATIVE_HEIGHT
+		if not _is_in_active_camera_frustum(representative_point):
+			_visibility_cache.erase(npc)
+			continue
+		_visibility_cache[npc] = {
+			"unobstructed": _has_world_line_of_sight(camera, representative_point),
+			"timestamp": _elapsed_since_configure,
+		}
+	_visibility_cursor = (_visibility_cursor + checks) % far_npcs.size()
+
+func _has_world_line_of_sight(camera: Camera3D, world_position: Vector3) -> bool:
+	if camera == null or get_world_3d() == null:
+		return false
+	var query := PhysicsRayQueryParameters3D.create(camera.global_position, world_position, WORLD_COLLISION_LAYER)
+	query.collide_with_bodies = true
+	query.collide_with_areas = true
+	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
+func _get_active_camera() -> Camera3D:
+	var viewport := get_viewport()
+	return viewport.get_camera_3d() if viewport != null else null
+
+func _horizontal_distance_to_player(world_position: Vector3, player_node: Node3D) -> float:
+	if player_node == null:
+		return INF
+	var offset := world_position - player_node.global_position
+	offset.y = 0.0
+	return offset.length()
 
 func _recycle_out_of_range_npcs() -> void:
 	var player_node := _player as Node3D
@@ -534,6 +635,7 @@ func _release_npc(npc: Node) -> void:
 		return
 	var role: String = String(_active_npcs[npc])
 	_active_npcs.erase(npc)
+	_visibility_cache.erase(npc)
 	if role == "civilian":
 		_civilian_pool.release(npc)
 	else:
@@ -561,12 +663,20 @@ func _get_hostile_group_service() -> Node:
 
 func release_all() -> void:
 	_active_npcs.clear()
+	_clear_visibility_cache()
 	_civilian_pool.release_all()
 	_hostile_pool.release_all()
 	_initial_spawned_count = 0
 	_initial_visible_slots_used = 0
 	_elapsed_since_configure = 0.0
 	_clear_pending_death_replacements()
+
+func _clear_visibility_cache() -> void:
+	_visibility_cache.clear()
+	_visibility_cursor = 0
+
+func get_visibility_cache_size() -> int:
+	return _visibility_cache.size()
 
 func _clear_pending_death_replacements() -> void:
 	_pending_death_replacements["civilian"] = 0
