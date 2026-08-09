@@ -36,6 +36,7 @@ func run() -> Array[Dictionary]:
 	_test_building_validity_probe(results)
 	_test_grace_boundaries_and_combat(results)
 	_test_safe_radius_behavior(results)
+	_test_civilian_roaming_anchors(results)
 	_test_recycling_and_pool_reuse(results)
 	return results
 
@@ -318,6 +319,72 @@ func _test_safe_radius_behavior(results: Array[Dictionary]) -> void:
 	_expect(results, "hostiles inside safe radius move outward during grace", distance_after > distance_before)
 	_expect(results, "grace movement does not leave a hostile inside safe radius", distance_after >= 30.0)
 	_expect(results, "grace movement keeps the active wander target safe", _horizontal_distance_from(updated_target, player.global_position) >= 30.0)
+	_cleanup_fixture(fixture)
+
+func _test_civilian_roaming_anchors(results: Array[Dictionary]) -> void:
+	var settings := _make_settings()
+	settings.initial_population_count = 0
+	settings.initial_visible_count = 0
+	settings.civilian_target_count = 0
+	settings.hostile_target_count = 0
+	settings.spawn_budget_per_frame = 0
+	var fixture := _create_fixture(settings)
+	var manager: Node = fixture["manager"]
+	var player: Node3D = fixture["player"]
+	var civilian_pool: NpcPool = manager.get("_civilian_pool")
+	var civilian_profile := load("res://resources/default_civilian_profile.tres") as NpcProfile
+	var first_requested_position := Vector3(18.0, 1.2, -24.0)
+	var second_requested_position := Vector3(-30.0, 1.2, 28.0)
+	var first := civilian_pool.checkout(civilian_profile, first_requested_position, "anchor-civilian-1", &"", player)
+	var second := civilian_pool.checkout(civilian_profile, second_requested_position, "anchor-civilian-2", &"", player)
+	var first_grounded_position := (first as Node3D).global_position
+	var second_grounded_position := (second as Node3D).global_position
+	var first_anchor := first.get("_roaming_anchor") as Vector3
+	var second_anchor := second.get("_roaming_anchor") as Vector3
+	_expect(results, "civilian anchors match grounded activation positions", first_anchor.is_equal_approx(first_grounded_position) and second_anchor.is_equal_approx(second_grounded_position))
+	_expect(results, "distinct civilian activations retain distinct roaming anchors", not first_anchor.is_equal_approx(second_anchor))
+
+	var first_rng := first.get("_rng") as RandomNumberGenerator
+	var second_rng := second.get("_rng") as RandomNumberGenerator
+	var first_targets_bounded := true
+	var second_targets_bounded := true
+	if first_rng != null:
+		first_rng.seed = 101
+	for _index in range(12):
+		first.call("_select_wander_target")
+		var first_offset := (first.get("_wander_target") as Vector3) - first_anchor
+		first_offset.y = 0.0
+		first_targets_bounded = first_targets_bounded and first_offset.length() >= 7.999 and first_offset.length() <= 28.001
+	if second_rng != null:
+		second_rng.seed = 202
+	for _index in range(12):
+		second.call("_select_wander_target")
+		var second_offset := (second.get("_wander_target") as Vector3) - second_anchor
+		second_offset.y = 0.0
+		second_targets_bounded = second_targets_bounded and second_offset.length() >= 7.999 and second_offset.length() <= 28.001
+	_expect(results, "civilian wander targets stay within each own anchor bounds", first_targets_bounded and second_targets_bounded)
+
+	player.global_position = Vector3(800.0, 1.2, 800.0)
+	var target_before_player_move: Vector3
+	var target_after_player_move: Vector3
+	if first_rng != null:
+		first_rng.seed = 303
+	first.call("_select_wander_target")
+	target_before_player_move = first.get("_wander_target") as Vector3
+	if first_rng != null:
+		first_rng.seed = 303
+	first.call("_select_wander_target")
+	target_after_player_move = first.get("_wander_target") as Vector3
+	_expect(results, "moving the player does not move a civilian roaming region", target_before_player_move.is_equal_approx(target_after_player_move))
+
+	civilian_pool.release(first)
+	_expect(results, "pool release clears the civilian roaming anchor", not bool(first.get("active")) and (first.get("_roaming_anchor") as Vector3).is_zero_approx())
+	var reactivation_position := Vector3(-42.0, 1.2, -36.0)
+	var reactivated := civilian_pool.checkout(civilian_profile, reactivation_position, "anchor-civilian-3", &"", player)
+	var reactivated_anchor := reactivated.get("_roaming_anchor") as Vector3
+	_expect(results, "civilian reactivation replaces its prior roaming anchor", reactivated == first and reactivated_anchor.is_equal_approx((reactivated as Node3D).global_position) and not reactivated_anchor.is_equal_approx(first_anchor))
+	civilian_pool.release(second)
+	civilian_pool.release(reactivated)
 	_cleanup_fixture(fixture)
 
 func _test_recycling_and_pool_reuse(results: Array[Dictionary]) -> void:

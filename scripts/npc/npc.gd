@@ -41,6 +41,7 @@ var impact_eligible: bool = false
 var active: bool = false
 
 var _wander_target := Vector3.ZERO
+var _roaming_anchor := Vector3.ZERO
 var _wander_time_left: float = 0.0
 var _attack_cooldown: float = 0.0
 var _panic_time_left: float = 0.0
@@ -100,6 +101,7 @@ func activate(
 	_hostile_awareness_time_left = _get_hostile_awareness_phase(new_lifecycle_id)
 	_died = false
 	global_position = _resolve_grounded_spawn_position(spawn_position)
+	_roaming_anchor = global_position
 	velocity = Vector3.ZERO
 	_visual_yaw = 0.0
 	if human_visual != null:
@@ -140,6 +142,7 @@ func deactivate() -> void:
 	velocity = Vector3.ZERO
 	_visual_yaw = 0.0
 	_wander_target = global_position
+	_roaming_anchor = Vector3.ZERO
 	_wander_time_left = 0.0
 	_attack_cooldown = 0.0
 	_panic_time_left = 0.0
@@ -485,7 +488,9 @@ func _resolve_grounded_spawn_position(requested_position: Vector3) -> Vector3:
 
 func _select_wander_target() -> void:
 	var center := global_position
-	if target_player != null:
+	if profile != null and not profile.is_hostile():
+		center = _roaming_anchor
+	elif profile != null and profile.is_hostile() and target_player != null:
 		center = target_player.global_position
 	var angle := _rng.randf_range(0.0, TAU)
 	var minimum_radius := 8.0
