@@ -24,6 +24,8 @@ func _run() -> void:
 	_expect("city contains multiple parks", district_a.get_park_count() >= 2)
 	_expect("civilian spawns are distributed", district_a.get_spawn_points("civilian").size() >= 32)
 	_expect("hostile spawns are distributed", district_a.get_spawn_points("hostile").size() >= 24)
+	_test_spawn_coverage(district_a, "civilian")
+	_test_spawn_coverage(district_a, "hostile")
 	_expect("all generated civilian markers avoid buildings", _all_spawn_points_are_valid(district_a, "civilian"))
 	_expect("all generated hostile markers avoid buildings", _all_spawn_points_are_valid(district_a, "hostile"))
 	_expect("player spawn is available", district_a.get_player_spawn_position().y > 0.0)
@@ -128,6 +130,45 @@ func _all_spawn_points_are_valid(district: Node, role: String) -> bool:
 		if not district.is_npc_spawn_position_valid(point.global_position):
 			return false
 	return true
+
+func _test_spawn_coverage(district: Node, role: String) -> void:
+	var layout: Dictionary = district.get("_layout")
+	var points: Array[Marker3D] = district.get_spawn_points(role)
+	var bins: Array[int] = []
+	bins.resize(16)
+	bins.fill(0)
+	var half_extent := float(layout.get("half_extent", 0.0))
+	var city_size := float(layout.get("city_size", 0.0))
+	var in_bounds := true
+	var on_road := true
+	var building_valid := true
+	for point in points:
+		var position := point.global_position
+		var cell_x := clampi(int(floor((position.x + half_extent) / city_size * 4.0)), 0, 3)
+		var cell_z := clampi(int(floor((position.z + half_extent) / city_size * 4.0)), 0, 3)
+		bins[cell_z * 4 + cell_x] += 1
+		in_bounds = in_bounds and absf(position.x) <= half_extent and absf(position.z) <= half_extent
+		var matches_road := false
+		for road_center in layout.get("road_centers", []):
+			matches_road = matches_road or is_equal_approx(position.x, float(road_center)) or is_equal_approx(position.z, float(road_center))
+		on_road = on_road and matches_road
+		for building in layout.get("buildings", []):
+			if CityLayout.is_point_inside_building_footprint(position, building, 0.5):
+				building_valid = false
+				break
+	var non_empty_cells := 0
+	var minimum_count := 2147483647
+	var maximum_count := 0
+	for count in bins:
+		if count > 0:
+			non_empty_cells += 1
+		minimum_count = mini(minimum_count, count)
+		maximum_count = maxi(maximum_count, count)
+	_expect("%s markers cover every 4-by-4 map cell" % role, points.size() >= 16 and non_empty_cells == 16)
+	_expect("%s marker cell counts stay balanced" % role, points.size() < 16 or maximum_count - minimum_count <= 1)
+	_expect("%s markers stay within playable bounds" % role, in_bounds)
+	_expect("%s markers stay on generated roads" % role, on_road)
+	_expect("%s markers pass the pure building footprint predicate" % role, building_valid)
 
 func _test_neon_contract(district_a: Node, district_b: Node) -> void:
 	var neon_a := district_a.get_node_or_null("BuildingNeons") as Node3D

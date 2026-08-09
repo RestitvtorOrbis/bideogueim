@@ -27,6 +27,8 @@ class DamageProbe extends Node3D:
 func run() -> Array[Dictionary]:
 	var results: Array[Dictionary] = []
 	_test_settings_contract(results)
+	_test_bucket_selection(results)
+	_test_default_initial_spread(results)
 	_test_initial_population_and_budget(results)
 	_test_role_specific_spawn_distances(results)
 	_test_same_role_death_replacements(results)
@@ -43,6 +45,8 @@ func _test_settings_contract(results: Array[Dictionary]) -> void:
 	_expect(results, "crowd settings expose a visible initial quota", settings != null and settings.initial_visible_count > 0)
 	_expect(results, "crowd settings expose a bounded spawn budget", settings != null and settings.spawn_budget_per_frame > 0)
 	_expect(results, "crowd settings expose bounded spawn attempts", settings != null and settings.spawn_candidate_attempts > 0)
+	_expect(results, "default minimum NPC separation is 4.5 meters", settings != null and is_equal_approx(settings.minimum_npc_separation, 4.5))
+	_expect(results, "default spawn candidate attempts are 24", settings != null and settings.spawn_candidate_attempts == 24)
 	_expect(results, "crowd settings keep recycling outside the active radius", settings != null and settings.despawn_distance > settings.spawn_distance)
 	_expect(results, "initial civilian spawn floor is 20 meters", settings != null and is_equal_approx(settings.initial_civilian_minimum_spawn_distance, 20.0))
 	_expect(results, "initial hostile spawn floor is 35 meters", settings != null and is_equal_approx(settings.initial_hostile_minimum_spawn_distance, 35.0))
@@ -50,6 +54,82 @@ func _test_settings_contract(results: Array[Dictionary]) -> void:
 	_expect(results, "death replacement floor is 30 meters for every role", settings != null and is_equal_approx(settings.death_replacement_minimum_spawn_distance, 30.0))
 	_expect(results, "hostile safe radius is 30 meters", settings != null and is_equal_approx(settings.hostile_safe_radius, 30.0))
 	_expect(results, "hostile grace period is 8 seconds", settings != null and is_equal_approx(settings.hostile_grace_period, 8.0))
+
+func _test_bucket_selection(results: Array[Dictionary]) -> void:
+	var settings := _make_settings()
+	settings.initial_population_count = 0
+	settings.initial_visible_count = 0
+	settings.spawn_distance = 100.0
+	settings.spawn_edge_padding = 0.0
+	settings.minimum_spawn_distance = 0.0
+	settings.spawn_jitter_radius = 0.0
+	settings.minimum_npc_separation = 4.5
+	settings.spawn_candidate_attempts = 2
+	var fixture := _create_fixture(settings)
+	var manager: Node = fixture["manager"]
+	var district: SpawnFixtureDistrict = fixture["district"]
+	var points: Array[Marker3D] = [district._civilian_points[0], district._civilian_points[1]]
+	points[0].position = Vector3(50.0, 1.2, 0.0)
+	points[1].position = Vector3(-50.0, 1.2, 0.0)
+	var blocker := Node3D.new()
+	blocker.position = Vector3(45.0, 1.2, 0.0)
+	district.add_child(blocker)
+	var active: Dictionary = manager.get("_active_npcs")
+	active[blocker] = "civilian"
+	var occupancy_result: Dictionary = manager.call("_find_spawn_position", points, false, false, 0.0, false)
+	_expect(results, "spawn selection prefers the less-occupied sector-band", occupancy_result.get("found", false) and occupancy_result["position"] == Vector3(-50.0, 1.2, 0.0))
+
+	active.clear()
+	points[0].position = Vector3(50.0, 1.2, 0.0)
+	points[1].position = Vector3(60.0, 1.2, 0.0)
+	var isolation_blocker := Node3D.new()
+	isolation_blocker.position = Vector3(45.0, 1.2, 0.0)
+	district.add_child(isolation_blocker)
+	active[isolation_blocker] = "civilian"
+	var isolation_result: Dictionary = manager.call("_find_spawn_position", points, false, false, 0.0, false)
+	_expect(results, "spawn selection then prefers the more isolated candidate", isolation_result.get("found", false) and isolation_result["position"] == Vector3(60.0, 1.2, 0.0))
+
+	active.clear()
+	points[0].position = Vector3(50.0, 1.2, 0.0)
+	points[1].position = Vector3(50.0, 1.2, 0.0)
+	var separation_blocker := Node3D.new()
+	separation_blocker.position = Vector3(50.0, 1.2, 0.0)
+	district.add_child(separation_blocker)
+	active[separation_blocker] = "civilian"
+	var allocations_before := int(manager.get("pool_allocations"))
+	var invalid_result: Dictionary = manager.call("_find_spawn_position", points, false, false, 0.0, false)
+	_expect(results, "no separated candidate defers without an invalid fallback", not invalid_result.get("found", false) and int(manager.get("pool_allocations")) == allocations_before)
+	_cleanup_fixture(fixture)
+
+func _test_default_initial_spread(results: Array[Dictionary]) -> void:
+	var settings := load("res://resources/default_crowd_settings.tres") as CrowdSettings
+	var district := preload("res://scenes/District.tscn").instantiate() as Node3D
+	var player := DamageProbe.new()
+	var manager := preload("res://scripts/npc/population_manager.gd").new() as Node3D
+	var tree := Engine.get_main_loop() as SceneTree
+	tree.root.add_child(district)
+	tree.root.add_child(player)
+	tree.root.add_child(manager)
+	player.global_position = Vector3.ZERO
+	manager.configure(district, player, settings)
+	var active: Dictionary = manager.get("_active_npcs")
+	var bucket_counts: Array[int] = []
+	bucket_counts.resize(16)
+	bucket_counts.fill(0)
+	for npc in active.keys():
+		if not is_instance_valid(npc):
+			continue
+		var bucket := int(manager.call("_get_spawn_bucket", (npc as Node3D).global_position))
+		bucket_counts[bucket] += 1
+	var occupied_buckets := 0
+	var largest_bucket := 0
+	for count in bucket_counts:
+		occupied_buckets += 1 if count > 0 else 0
+		largest_bucket = maxi(largest_bucket, count)
+	_expect(results, "default initial population reaches 40 NPCs", int(manager.get("active_npc_count")) == 40)
+	_expect(results, "default initial population occupies at least 12 sector-bands", occupied_buckets >= 12 and largest_bucket <= 5)
+	_expect(results, "default initial population respects 4.5 meter pair separation", _all_active_pairs_separated(manager, settings.minimum_npc_separation))
+	_cleanup_fixture({"district": district, "player": player, "manager": manager})
 
 func _test_initial_population_and_budget(results: Array[Dictionary]) -> void:
 	var settings := _make_settings()
@@ -346,6 +426,18 @@ func _horizontal_distance_from(position: Vector3, center: Vector3) -> float:
 	var offset := position - center
 	offset.y = 0.0
 	return offset.length()
+
+func _all_active_pairs_separated(manager: Node, minimum_distance: float) -> bool:
+	var active: Dictionary = manager.get("_active_npcs")
+	var npcs: Array[Node3D] = []
+	for npc in active.keys():
+		if is_instance_valid(npc) and npc is Node3D:
+			npcs.append(npc as Node3D)
+	for left_index in range(npcs.size()):
+		for right_index in range(left_index + 1, npcs.size()):
+			if _horizontal_distance_from(npcs[left_index].global_position, npcs[right_index].global_position) + 0.001 < minimum_distance:
+				return false
+	return true
 
 func _expect(results: Array[Dictionary], name: String, condition: bool) -> void:
 	results.append({"name": name, "passed": condition, "message": "" if condition else "Assertion failed"})

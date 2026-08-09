@@ -1,5 +1,8 @@
 extends Node3D
 
+const SPAWN_ANGULAR_SECTOR_COUNT := 8
+const SPAWN_RADIAL_BAND_COUNT := 2
+
 @export var crowd_settings: CrowdSettings
 @export var civilian_profile: NpcProfile
 @export var hostile_profile: NpcProfile
@@ -251,8 +254,11 @@ func _find_spawn_position(
 	) -> Dictionary:
 	var shuffled_points := _shuffled_points(points)
 	var attempts := maxi(1, crowd_settings.spawn_candidate_attempts)
-	var fallback_position := Vector3.ZERO
-	var has_fallback := false
+	var best_position := Vector3.ZERO
+	var best_occupancy := 0
+	var best_nearest_distance := -INF
+	var best_visibility_preference := false
+	var has_best := false
 	for attempt in range(attempts):
 		var point: Marker3D = shuffled_points[attempt % shuffled_points.size()]
 		var candidate := _build_spawn_candidate(point, near_player, spawn_minimum_distance)
@@ -262,26 +268,95 @@ func _find_spawn_position(
 			continue
 		if strict_offscreen and not _is_at_least_player_distance(candidate, spawn_minimum_distance):
 			continue
-		var is_separated := _is_separated_from_active(candidate)
-		if not has_fallback:
-			fallback_position = candidate
-			has_fallback = true
 		var is_visible := _is_in_active_camera_frustum(candidate)
-		if strict_offscreen:
-			if not is_visible and is_separated:
-				return {"found": true, "position": candidate}
+		if strict_offscreen and is_visible:
 			continue
-		if prefer_visible and is_visible and is_separated:
-			return {"found": true, "position": candidate}
-		if not prefer_visible and not is_visible and is_separated:
-			return {"found": true, "position": candidate}
-	# Ordinary replenishment keeps visibility as a preference and may relax
-	# separation. Death replacements never use this visible fallback.
-	if strict_offscreen:
-		return {"found": false, "position": Vector3.ZERO}
-	if has_fallback:
-		return {"found": true, "position": fallback_position}
+		if not _is_separated_from_active(candidate):
+			continue
+		var bucket := _get_spawn_bucket(candidate)
+		var occupancy := _get_spawn_bucket_occupancy(bucket)
+		var nearest_distance := _get_nearest_active_npc_distance(candidate)
+		var visibility_preference := is_visible == prefer_visible
+		if not has_best or _is_better_spawn_candidate(
+				occupancy,
+				nearest_distance,
+				visibility_preference,
+				best_occupancy,
+				best_nearest_distance,
+				best_visibility_preference
+			):
+			best_position = candidate
+			best_occupancy = occupancy
+			best_nearest_distance = nearest_distance
+			best_visibility_preference = visibility_preference
+			has_best = true
+	if has_best:
+		return {"found": true, "position": best_position}
+	# A candidate that fails hard validity, range, player-distance, or separation
+	# constraints defers spawning until a later frame.
 	return {"found": false, "position": Vector3.ZERO}
+
+func _is_better_spawn_candidate(
+		candidate_occupancy: int,
+		candidate_nearest_distance: float,
+		candidate_visibility_preference: bool,
+		best_occupancy: int,
+		best_nearest_distance: float,
+		best_visibility_preference: bool
+	) -> bool:
+	if candidate_occupancy != best_occupancy:
+		return candidate_occupancy < best_occupancy
+	if candidate_nearest_distance > best_nearest_distance + 0.001:
+		return true
+	if best_nearest_distance > candidate_nearest_distance + 0.001:
+		return false
+	if candidate_visibility_preference != best_visibility_preference:
+		return candidate_visibility_preference
+	# Keep the first candidate for an exact score tie. Candidate iteration is
+	# deterministic for deterministic point order and RNG state.
+	return false
+
+func _get_spawn_bucket(world_position: Vector3) -> int:
+	var player_node := _player as Node3D
+	if player_node == null:
+		return 0
+	var offset := world_position - player_node.global_position
+	offset.y = 0.0
+	var angle := fposmod(atan2(offset.z, offset.x) + PI, TAU)
+	var sector := clampi(
+		int(floor(angle / TAU * float(SPAWN_ANGULAR_SECTOR_COUNT))),
+		0,
+		SPAWN_ANGULAR_SECTOR_COUNT - 1
+	)
+	var active_radius := _get_active_spawn_radius()
+	var radial_band := 0 if offset.length() <= active_radius * 0.5 else 1
+	return radial_band * SPAWN_ANGULAR_SECTOR_COUNT + sector
+
+func _get_active_spawn_radius() -> float:
+	return maxf(1.0, crowd_settings.spawn_distance - crowd_settings.spawn_edge_padding)
+
+func _get_spawn_bucket_occupancy(bucket: int) -> int:
+	var occupancy := 0
+	for npc in _active_npcs.keys():
+		if not is_instance_valid(npc):
+			continue
+		var npc_node := npc as Node3D
+		if npc_node != null and _get_spawn_bucket(npc_node.global_position) == bucket:
+			occupancy += 1
+	return occupancy
+
+func _get_nearest_active_npc_distance(world_position: Vector3) -> float:
+	var nearest_distance := INF
+	for npc in _active_npcs.keys():
+		if not is_instance_valid(npc):
+			continue
+		var npc_node := npc as Node3D
+		if npc_node == null:
+			continue
+		var offset := npc_node.global_position - world_position
+		offset.y = 0.0
+		nearest_distance = minf(nearest_distance, offset.length())
+	return nearest_distance
 
 func _is_valid_npc_spawn_position(position: Vector3) -> bool:
 	if _district == null or not _district.has_method("is_npc_spawn_position_valid"):

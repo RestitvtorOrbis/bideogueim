@@ -109,8 +109,11 @@ static func generate(
 
 	var player_spawn := Vector3(0.0, 1.25, 0.0)
 	var vehicle_spawn := player_spawn + Vector3.FORWARD * 3.25
-	var civilian_spawns := _make_spawns(rng, road_centers, half_extent, civilian_count, 0)
-	var hostile_spawns := _make_spawns(rng, road_centers, half_extent, hostile_count, 1)
+	# Marker generation uses an independent role/seed-derived stream. This keeps
+	# the generated building set and its deterministic signature independent from
+	# spawn coverage changes.
+	var civilian_spawns := _make_spawns(city_seed, road_centers, half_extent, buildings, civilian_count, 0)
+	var hostile_spawns := _make_spawns(city_seed, road_centers, half_extent, buildings, hostile_count, 1)
 
 	var signature_parts: Array[String] = [
 		str(city_seed),
@@ -140,21 +143,82 @@ static func generate(
 	}
 
 static func _make_spawns(
-		rng: RandomNumberGenerator,
+		city_seed: int,
 		road_centers: Array[float],
 		half_extent: float,
+		buildings: Array[Dictionary],
 		count: int,
 		role_offset: int
 	) -> Array[Vector3]:
 	var spawns: Array[Vector3] = []
 	var safe_count := maxi(4, count)
+	var marker_rng := RandomNumberGenerator.new()
+	marker_rng.seed = _marker_seed(city_seed, role_offset)
 	for index in range(safe_count):
-		var road_index := posmod(index * 3 + role_offset * 5 + rng.randi_range(0, road_centers.size() - 1), road_centers.size())
-		var along := rng.randf_range(-half_extent + 12.0, half_extent - 12.0)
+		var cell_index := posmod(index + role_offset * 7, 16)
+		var cell_x := cell_index % 4
+		var cell_z := cell_index / 4
+		var cell_min_x := -half_extent + float(cell_x) * half_extent * 0.5
+		var cell_max_x := cell_min_x + half_extent * 0.5
+		var cell_min_z := -half_extent + float(cell_z) * half_extent * 0.5
+		var cell_max_z := cell_min_z + half_extent * 0.5
+		var margin := minf(6.0, half_extent * 0.1)
+		var options := _road_options_for_cell(road_centers, cell_min_x, cell_max_x, cell_min_z, cell_max_z)
+		if options.is_empty():
+			continue
+
 		var position := Vector3.ZERO
-		if (index + role_offset) % 2 == 0:
-			position = Vector3(along, 1.25, road_centers[road_index])
-		else:
-			position = Vector3(road_centers[road_index], 1.25, along)
-		spawns.append(position)
+		var found_valid_position := false
+		for option_attempt in range(options.size()):
+			var option_index := posmod(
+				index * 13 + role_offset * 17 + option_attempt + marker_rng.randi(),
+				options.size()
+			)
+			var option: Dictionary = options[option_index]
+			var along_min := cell_min_x + margin if bool(option["horizontal"]) else cell_min_z + margin
+			var along_max := cell_max_x - margin if bool(option["horizontal"]) else cell_max_z - margin
+			var along := marker_rng.randf_range(along_min, along_max)
+			var candidate := Vector3(
+				along if bool(option["horizontal"]) else float(option["road_center"]),
+				1.25,
+				float(option["road_center"]) if bool(option["horizontal"]) else along
+			)
+			if not _is_valid_marker_position(candidate, half_extent, buildings):
+				continue
+			position = candidate
+			found_valid_position = true
+			break
+		if found_valid_position:
+			spawns.append(position)
 	return spawns
+
+static func _marker_seed(city_seed: int, role_offset: int) -> int:
+	return city_seed * 1103515245 + role_offset * 12345 + 7919
+
+static func _road_options_for_cell(
+		road_centers: Array[float],
+		cell_min_x: float,
+		cell_max_x: float,
+		cell_min_z: float,
+		cell_max_z: float
+	) -> Array[Dictionary]:
+	var options: Array[Dictionary] = []
+	for road_center in road_centers:
+		var center := float(road_center)
+		if center > cell_min_z and center < cell_max_z:
+			options.append({"horizontal": true, "road_center": center})
+		if center > cell_min_x and center < cell_max_x:
+			options.append({"horizontal": false, "road_center": center})
+	return options
+
+static func _is_valid_marker_position(
+		position: Vector3,
+		half_extent: float,
+		buildings: Array[Dictionary]
+	) -> bool:
+	if position.x < -half_extent or position.x > half_extent or position.z < -half_extent or position.z > half_extent:
+		return false
+	for building in buildings:
+		if is_point_inside_building_footprint(position, building, 0.5):
+			return false
+	return true
