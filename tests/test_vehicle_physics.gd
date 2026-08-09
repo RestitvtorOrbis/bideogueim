@@ -36,40 +36,81 @@ func run() -> Array[Dictionary]:
 	_expect(results, "lamp shape mapping is stable at both ends", lamp_field != null and lamp_field.get_lamp_index_for_shape(0) == 0 and lamp_field.get_lamp_index_for_shape(lamp_field.get_collision_shape_count() - 1) == lamp_field.get_lamp_count() - 1)
 	_expect(results, "vehicle exposes continuous static-contact forwarding", vehicle.has_method("_integrate_forces") and int(vehicle.get("max_contacts_reported")) >= 8)
 
-	if lamp_field != null and lamp_field.get_lamp_count() >= 3:
-		var immediate_index := 0
-		var immediate_base := lamp_field.get_lamp_base_position(immediate_index)
-		lamp_field.receive_vehicle_contact(vehicle, immediate_index, immediate_base - Vector3(3.0, 0.0, 0.0), 7.0, Vector3.RIGHT, 1.0 / 60.0)
-		_expect(results, "7 m/s lamp contact bends immediately", lamp_field.get_bend_degrees(immediate_index) > 0.0)
-		_expect(results, "lamp bends away from the vehicle", lamp_field.get_bend_direction(immediate_index).x > 0.9)
-		var immediate_angle := lamp_field.get_bend_degrees(immediate_index)
-		for _index in 90:
-			lamp_field.receive_vehicle_contact(vehicle, immediate_index, immediate_base - Vector3(3.0, 0.0, 0.0), 12.0, Vector3.RIGHT, 0.1)
-		var capped_render := lamp_field.get_render_transform(immediate_index)
-		var capped_collision := lamp_field.get_collision_transform(immediate_index)
-		_expect(results, "lamp bend is capped at 75 degrees", lamp_field.get_bend_degrees(immediate_index) <= 75.001 and lamp_field.get_bend_degrees(immediate_index) >= immediate_angle)
-		_expect(results, "render and collision transforms stay aligned", _transforms_match(capped_render, capped_collision))
-		_expect(results, "maximum bend clears the full-height obstruction", absf(capped_collision.basis.y.y) * 2.0 < 1.0)
+	if lamp_field != null and lamp_field.get_lamp_count() >= 12:
+		var initial_index := 0
+		_expect(results, "every lamp starts at level 1", lamp_field.get_lamp_level(initial_index) == 1)
+		_expect(results, "every lamp starts with zero damage and hits", lamp_field.get_damage_points(initial_index) == 0 and lamp_field.get_distinct_hit_count(initial_index) == 0)
+		_expect(results, "every lamp starts upright and colliding", is_zero_approx(lamp_field.get_bend_degrees(initial_index)) and not lamp_field.is_collision_disabled(initial_index))
 
-		var sustained_index := 1
-		var sustained_base := lamp_field.get_lamp_base_position(sustained_index)
-		for _index in 59:
-			lamp_field.receive_vehicle_contact(vehicle, sustained_index, sustained_base - Vector3(3.0, 0.0, 0.0), 1.2, Vector3.RIGHT, 0.016)
-		_expect(results, "sub-threshold lamp contact waits before bending", lamp_field.get_bend_degrees(sustained_index) == 0.0)
-		for _index in 5:
-			lamp_field.receive_vehicle_contact(vehicle, sustained_index, sustained_base - Vector3(3.0, 0.0, 0.0), 1.2, Vector3.RIGHT, 0.016)
-		_expect(results, "sustained 1 m/s contact bends within 1.5 seconds", lamp_field.get_bend_degrees(sustained_index) > 0.0 and lamp_field.get_sustained_push_seconds(sustained_index) <= 1.5)
+		var below_impact_index := 1
+		_contact(lamp_field, vehicle, below_impact_index, 1.49, 0.0)
+		_expect(results, "speed below 1.5 m/s adds no impact damage", lamp_field.get_damage_points(below_impact_index) == 0 and lamp_field.get_distinct_hit_count(below_impact_index) == 0)
+		_gap(lamp_field)
 
-		var reset_index := 2
-		var reset_base := lamp_field.get_lamp_base_position(reset_index)
-		for _index in 30:
-			lamp_field.receive_vehicle_contact(vehicle, reset_index, reset_base - Vector3(3.0, 0.0, 0.0), 1.2, Vector3.RIGHT, 0.016)
-		lamp_field.call("_physics_process", 0.016)
-		lamp_field.call("_physics_process", 0.016)
-		for _index in 30:
-			lamp_field.receive_vehicle_contact(vehicle, reset_index, reset_base - Vector3(3.0, 0.0, 0.0), 1.2, Vector3.RIGHT, 0.016)
-		_expect(results, "contact gap resets only the sustained-push timer", lamp_field.get_bend_degrees(reset_index) == 0.0 and lamp_field.get_sustained_push_seconds(reset_index) < 1.0)
-		_expect(results, "already bent lamps do not repair after a gap", lamp_field.get_bend_degrees(immediate_index) > 0.0)
+		var light_impact_index := 2
+		_contact(lamp_field, vehicle, light_impact_index, 1.5, 0.0)
+		_expect(results, "1.5 m/s impact adds one point", lamp_field.get_damage_points(light_impact_index) == 1 and lamp_field.get_distinct_hit_count(light_impact_index) == 1 and lamp_field.get_lamp_level(light_impact_index) == 1)
+		_gap(lamp_field)
+
+		var light_band_index := 3
+		_contact(lamp_field, vehicle, light_band_index, 3.99, 0.0)
+		_expect(results, "under 4 m/s impact stays in the one-point band", lamp_field.get_damage_points(light_band_index) == 1 and lamp_field.get_lamp_level(light_band_index) == 1)
+		_gap(lamp_field)
+
+		var medium_impact_index := 4
+		_contact(lamp_field, vehicle, medium_impact_index, 4.0, 0.0)
+		_expect(results, "4 m/s impact adds two points and reaches level 2", lamp_field.get_damage_points(medium_impact_index) == 2 and lamp_field.get_lamp_level(medium_impact_index) == 2 and is_equal_approx(lamp_field.get_bend_degrees(medium_impact_index), 18.0))
+		_gap(lamp_field)
+
+		var medium_band_index := 5
+		_contact(lamp_field, vehicle, medium_band_index, 7.99, 0.0)
+		_expect(results, "under 8 m/s impact stays in the two-point band", lamp_field.get_damage_points(medium_band_index) == 2 and lamp_field.get_lamp_level(medium_band_index) == 2)
+		_gap(lamp_field)
+
+		var heavy_impact_index := 6
+		_contact(lamp_field, vehicle, heavy_impact_index, 8.0, 0.0)
+		_expect(results, "8 m/s impact adds four points and reaches level 3", lamp_field.get_damage_points(heavy_impact_index) == 4 and lamp_field.get_lamp_level(heavy_impact_index) == 3 and is_equal_approx(lamp_field.get_bend_degrees(heavy_impact_index), 38.0))
+		_expect(results, "lamp bends away from the vehicle", lamp_field.get_bend_direction(heavy_impact_index).x > 0.9)
+		_gap(lamp_field)
+
+		var repeated_index := 7
+		_contact(lamp_field, vehicle, repeated_index, 1.5, 0.0)
+		_contact(lamp_field, vehicle, repeated_index, 1.5, 0.0)
+		_expect(results, "repeated physics contacts count as one distinct hit", lamp_field.get_damage_points(repeated_index) == 1 and lamp_field.get_distinct_hit_count(repeated_index) == 1)
+		_gap(lamp_field)
+		_contact(lamp_field, vehicle, repeated_index, 1.5, 0.0)
+		_expect(results, "a contact gap permits a later distinct hit", lamp_field.get_damage_points(repeated_index) == 2 and lamp_field.get_distinct_hit_count(repeated_index) == 2 and lamp_field.get_lamp_level(repeated_index) == 2)
+		_gap(lamp_field)
+
+		var resting_index := 8
+		for _index in 4:
+			_contact(lamp_field, vehicle, resting_index, 0.0, 0.75)
+		_expect(results, "resting contact without speed or force is a no-op", lamp_field.get_damage_points(resting_index) == 0 and lamp_field.get_lamp_level(resting_index) == 1 and is_zero_approx(lamp_field.get_sustained_push_seconds(resting_index)))
+		_gap(lamp_field)
+
+		var force_index := 9
+		var force_delta := 0.75
+		var force_proxy := Vector3(2500.0 * force_delta, 0.0, 0.0)
+		for expected_level in [2, 3, 4, 5]:
+			_contact(lamp_field, vehicle, force_index, 0.0, force_delta, force_proxy)
+			var expected_angle: float = [18.0, 38.0, 62.0, 88.0][expected_level - 2]
+			_expect(results, "stationary force reaches exact level %d" % expected_level, lamp_field.get_lamp_level(force_index) == expected_level and lamp_field.get_damage_points(force_index) == (expected_level - 1) * 2 and is_equal_approx(lamp_field.get_bend_degrees(force_index), expected_angle))
+		_expect(results, "stationary force reaches level 5 within 3 seconds", lamp_field.get_damage_points(force_index) == 8 and lamp_field.is_collision_disabled(force_index))
+		var force_render := lamp_field.get_render_transform(force_index)
+		var force_collision := lamp_field.get_collision_transform(force_index)
+		_expect(results, "level 5 render and collision transforms stay aligned", _transforms_match(force_render, force_collision))
+		_expect(results, "level 5 uproots the lamp", absf(force_collision.basis.y.y) * 2.0 < 0.1)
+		var force_level := lamp_field.get_lamp_level(force_index)
+		var force_damage := lamp_field.get_damage_points(force_index)
+		var force_hits := lamp_field.get_distinct_hit_count(force_index)
+		_gap(lamp_field)
+		_expect(results, "lamp level and pose persist after a contact gap", lamp_field.get_lamp_level(force_index) == force_level and lamp_field.get_damage_points(force_index) == force_damage and is_equal_approx(lamp_field.get_bend_degrees(force_index), 88.0))
+		_contact(lamp_field, vehicle, force_index, 12.0, 0.75, force_proxy)
+		_expect(results, "post-uproot contacts are harmless no-ops", lamp_field.get_lamp_level(force_index) == force_level and lamp_field.get_damage_points(force_index) == force_damage and lamp_field.get_distinct_hit_count(force_index) == force_hits and lamp_field.is_collision_disabled(force_index))
+
+		var shape_count := lamp_field.get_collision_shape_count()
+		_expect(results, "level 5 preserves total collision shape count", shape_count == lamp_field.get_lamp_count())
+		_expect(results, "level 5 preserves stable shape mapping", lamp_field.get_lamp_index_for_shape(force_index) == force_index and lamp_field.get_lamp_index_for_shape(shape_count - 1) == lamp_field.get_lamp_count() - 1)
 	vehicle.call("exit_vehicle")
 	player.queue_free()
 	vehicle.queue_free()
@@ -84,3 +125,11 @@ func _transforms_match(first: Transform3D, second: Transform3D) -> bool:
 		and first.basis.x.normalized().distance_to(second.basis.x.normalized()) < 0.001 \
 		and first.basis.y.normalized().distance_to(second.basis.y.normalized()) < 0.001 \
 		and first.basis.z.normalized().distance_to(second.basis.z.normalized()) < 0.001
+
+func _contact(field: LampField, vehicle: Node, lamp_index: int, speed: float, delta: float, impulse_proxy: Vector3 = Vector3.ZERO) -> void:
+	var base := field.get_lamp_base_position(lamp_index)
+	field.receive_vehicle_contact(vehicle, lamp_index, base - Vector3(3.0, 0.0, 0.0), speed, impulse_proxy, delta)
+
+func _gap(field: LampField) -> void:
+	field.call("_physics_process", 0.016)
+	field.call("_physics_process", 0.016)
