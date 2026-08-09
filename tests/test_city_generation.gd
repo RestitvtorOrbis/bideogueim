@@ -7,6 +7,9 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_building_footprint_predicate()
+	if OS.get_cmdline_user_args().has("--neon-only"):
+		_run_neon_only()
+		return
 	var district_a := preload("res://scenes/District.tscn").instantiate()
 	var district_b := preload("res://scenes/District.tscn").instantiate()
 	district_a.city_seed = 918273
@@ -44,6 +47,7 @@ func _run() -> void:
 	_expect("repeated geometry uses MultiMesh", district_a.get_node_or_null("BuildingBlocks/Style0") is MultiMeshInstance3D and lamp_posts != null and lamp_glows != null)
 	_expect("every generated lamp has one collision shape", lamp_field != null and lamp_field.get_lamp_count() > 0 and lamp_field.get_collision_shape_count() == lamp_field.get_lamp_count())
 	_expect("lamp render and collision indices are stable", lamp_field != null and lamp_posts != null and lamp_glows != null and lamp_posts.multimesh.instance_count == lamp_field.get_lamp_count() and lamp_glows.multimesh.instance_count == lamp_field.get_lamp_count() and lamp_field.get_lamp_index_for_shape(0) == 0)
+	_test_neon_contract(district_a, district_b)
 	_expect("scene tree stays compact", _count_nodes(district_a) < 180)
 
 	var vehicle_script := load("res://scripts/vehicle/arcade_vehicle.gd") as GDScript
@@ -78,13 +82,30 @@ func _run() -> void:
 	await process_frame
 	_finish_city_test()
 
+func _run_neon_only() -> void:
+	var district_a := preload("res://scenes/District.tscn").instantiate()
+	var district_b := preload("res://scenes/District.tscn").instantiate()
+	district_a.city_seed = 240817
+	district_b.city_seed = 240817
+	district_a.call("_ensure_city_built")
+	district_b.call("_ensure_city_built")
+	_test_neon_contract(district_a, district_b)
+	_expect("neon-only city keeps the generated building set", district_a.get_building_count() >= 100)
+	var failed := 0
+	for result in _results:
+		if not result["passed"]:
+			failed += 1
+		print("[CITY-NEON] %s: %s" % ["PASS" if result["passed"] else "FAIL", result["name"]])
+	district_a.free()
+	district_b.free()
+	quit(1 if failed > 0 else 0)
+
 func _count_nodes(node: Node) -> int:
 	var count := 1
 	for child in node.get_children():
 		count += _count_nodes(child)
 	return count
 
-func _expect(name: String, passed: bool) -> void:
 func _test_building_footprint_predicate() -> void:
 	var unrotated := {
 		"position": Vector3(10.0, 8.0, -4.0),
@@ -108,6 +129,78 @@ func _all_spawn_points_are_valid(district: Node, role: String) -> bool:
 			return false
 	return true
 
+func _test_neon_contract(district_a: Node, district_b: Node) -> void:
+	var neon_a := district_a.get_node_or_null("BuildingNeons") as Node3D
+	var neon_b := district_b.get_node_or_null("BuildingNeons") as Node3D
+	var positions_a: Array = neon_a.get_meta("fixture_positions", []) if neon_a != null else []
+	var positions_b: Array = neon_b.get_meta("fixture_positions", []) if neon_b != null else []
+	var sign_positions: Array = neon_a.get_meta("fixture_sign_positions", []) if neon_a != null else []
+	var sign_positions_b: Array = neon_b.get_meta("fixture_sign_positions", []) if neon_b != null else []
+	var colors_a: Array = neon_a.get_meta("fixture_colors", []) if neon_a != null else []
+	var colors_b: Array = neon_b.get_meta("fixture_colors", []) if neon_b != null else []
+	var fixture_buildings: Array = neon_a.get_meta("fixture_buildings", []) if neon_a != null else []
+	var lights: Array[Node] = neon_a.find_children("*", "OmniLight3D", true, false) if neon_a != null else []
+	var signs: Array[Node] = neon_a.find_children("*", "MultiMeshInstance3D", true, false) if neon_a != null else []
+	_expect("building neon root exposes exactly eight fixtures", neon_a != null and district_a.get_neon_fixture_count() == 8 and int(neon_a.get_meta("fixture_count", 0)) == 8)
+	_expect("building neons are deterministic for equal seeds", _arrays_match(positions_a, positions_b) and _arrays_match(sign_positions, sign_positions_b) and _arrays_match(colors_a, colors_b))
+	_expect("building neons span the map", _neon_spans_map(positions_a, district_a.get_city_size()))
+	var sign_count := 0
+	var emissive_signs := true
+	for sign_node in signs:
+		var sign := sign_node as MultiMeshInstance3D
+		if sign == null or sign.multimesh == null:
+			emissive_signs = false
+			continue
+		sign_count += sign.multimesh.instance_count
+		var sign_mesh := sign.multimesh.mesh as BoxMesh
+		var material := sign_mesh.material as StandardMaterial3D if sign_mesh != null else null
+		if material == null or not material.emission_enabled or material.emission_energy_multiplier < 5.0:
+			emissive_signs = false
+	_expect("every neon fixture has visible emissive sign geometry", sign_count == 8 and emissive_signs and signs.size() == 3)
+	var lights_valid := lights.size() == 8
+	for light_node in lights:
+		var light := light_node as OmniLight3D
+		if light == null or light.light_energy < 5.0 or light.omni_range < 16.0 or light.omni_range > 24.0 or light.shadow_enabled:
+			lights_valid = false
+			continue
+		var fixture_index := int(light.get_meta("fixture_index", -1))
+		if fixture_index < 0 or fixture_index >= colors_a.size() or light.light_color != colors_a[fixture_index]:
+			lights_valid = false
+	_expect("neon signs have matching bounded OmniLights", lights_valid)
+	var outside_buildings := sign_positions.size() == 8 and positions_a.size() == 8 and fixture_buildings.size() == 8
+	for index in range(mini(sign_positions.size(), fixture_buildings.size())):
+		var building: Dictionary = fixture_buildings[index]
+		var building_position: Vector3 = building["position"]
+		var local_sign: Vector3 = Basis(Vector3.UP, -float(building["rotation"])) * (sign_positions[index] - building_position)
+		var local_light: Vector3 = Basis(Vector3.UP, -float(building["rotation"])) * (positions_a[index] - building_position)
+		var exterior_sign := absf(local_sign.x) > float(building["width"]) * 0.5 or absf(local_sign.z) > float(building["depth"]) * 0.5
+		var exterior_light := absf(local_light.x) > float(building["width"]) * 0.5 or absf(local_light.z) > float(building["depth"]) * 0.5
+		if not exterior_sign or not exterior_light:
+			outside_buildings = false
+	_expect("neon signs and lights stay outside building volumes", outside_buildings)
+	_expect("neon node root stays compact", neon_a != null and _count_nodes(neon_a) <= 12)
+
+func _arrays_match(left: Array, right: Array) -> bool:
+	if left.size() != right.size():
+		return false
+	for index in range(left.size()):
+		if left[index] != right[index]:
+			return false
+	return true
+
+func _neon_spans_map(positions: Array, city_size: float) -> bool:
+	if positions.size() != 8:
+		return false
+	var half_extent := city_size * 0.5
+	var x_bins := {}
+	var z_bins := {}
+	for position in positions:
+		var world_position: Vector3 = position
+		x_bins[clampi(int(floor((world_position.x + half_extent) / city_size * 4.0)), 0, 3)] = true
+		z_bins[clampi(int(floor((world_position.z + half_extent) / city_size * 2.0)), 0, 1)] = true
+	return x_bins.size() == 4 and z_bins.size() == 2
+
+func _expect(name: String, passed: bool) -> void:
 	_results.append({"name": name, "passed": passed})
 
 func _finish_city_test() -> void:

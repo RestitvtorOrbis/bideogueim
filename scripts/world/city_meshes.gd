@@ -5,6 +5,7 @@ extends RefCounted
 ## rendered through MultiMesh so a large city does not become a large scene tree.
 
 static func make_materials() -> Dictionary:
+	var neon_colors := neon_palette()
 	return {
 		"ground": _pbr_material(
 			"res://assets/textures/sparse_grass/sparse_grass_diff_1k.jpg",
@@ -63,6 +64,9 @@ static func make_materials() -> Dictionary:
 		),
 		"building_roof": _solid_material(Color("#28313a"), 0.88),
 		"glass": _emissive_material(Color("#9ed8eb"), Color("#71b7d7"), 0.52),
+		"neon_cyan": _emissive_material(neon_colors[0], neon_colors[0], 6.0),
+		"neon_magenta": _emissive_material(neon_colors[1], neon_colors[1], 6.0),
+		"neon_purple": _emissive_material(neon_colors[2], neon_colors[2], 6.0),
 		"trunk": _solid_material(Color("#5b3f2b"), 0.98),
 		"leaves": _noise_material(Color("#367b54"), 0.88, 0.3, 0.18),
 		"lamp": _solid_material(Color("#27313b"), 0.72),
@@ -70,6 +74,13 @@ static func make_materials() -> Dictionary:
 		"bench": _solid_material(Color("#76543a"), 0.9),
 		"planter": _solid_material(Color("#5b6668"), 0.86),
 	}
+
+static func neon_palette() -> Array[Color]:
+	return [
+		Color("#42f4ff"),
+		Color("#ff3fc8"),
+		Color("#a66bff"),
+	]
 
 static func box_mesh(size: Vector3, material: Material) -> BoxMesh:
 	var mesh := BoxMesh.new()

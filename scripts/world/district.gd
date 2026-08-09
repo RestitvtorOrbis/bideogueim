@@ -10,6 +10,12 @@ extends Node3D
 @export_range(4, 128, 1) var civilian_spawn_count: int = 48
 @export_range(4, 128, 1) var hostile_spawn_count: int = 32
 
+const NEON_FIXTURE_COUNT := 8
+const NEON_BIN_COLUMNS := 4
+const NEON_BIN_ROWS := 2
+const NEON_LIGHT_RANGE := 20.0
+const NEON_LIGHT_ENERGY := 7.0
+
 var _layout: Dictionary = {}
 var _materials: Dictionary = {}
 var _city_built := false
@@ -72,6 +78,11 @@ func get_city_bounds() -> AABB:
 func get_building_count() -> int:
 	_ensure_city_built()
 	return (_layout.get("buildings", []) as Array).size()
+
+func get_neon_fixture_count() -> int:
+	_ensure_city_built()
+	var neon_root := get_node_or_null("BuildingNeons")
+	return int(neon_root.get_meta("fixture_count", 0)) if neon_root != null else 0
 
 func get_park_count() -> int:
 	_ensure_city_built()
@@ -272,6 +283,189 @@ func _build_buildings() -> void:
 	shape.set_faces(building_faces)
 	collision.shape = shape
 	collision_body.add_child(collision)
+	_build_building_neons()
+
+func _build_building_neons() -> void:
+	var neon_root := Node3D.new()
+	neon_root.name = "BuildingNeons"
+	add_child(neon_root)
+
+	var palette := CityMeshes.neon_palette()
+	var material_keys := ["neon_cyan", "neon_magenta", "neon_purple"]
+	var color_names := ["Cyan", "Magenta", "Purple"]
+	var sign_transforms: Array = [[], [], []]
+	var sign_fixture_indices: Array = [[], [], []]
+	var fixture_positions: Array[Vector3] = []
+	var fixture_sign_positions: Array[Vector3] = []
+	var fixture_colors: Array[Color] = []
+	var fixture_building_indices: Array[int] = []
+	var fixture_buildings: Array[Dictionary] = []
+	var selected := _select_neon_buildings()
+
+	for fixture_index in range(selected.size()):
+		var selected_entry: Dictionary = selected[fixture_index]
+		var building: Dictionary = selected_entry["building"]
+		var palette_index := fixture_index % palette.size()
+		var facade := _make_neon_facade(building)
+		var sign_transform: Transform3D = facade["sign_transform"]
+		var sign_position := sign_transform.origin
+		var light_position: Vector3 = facade["light_position"]
+		sign_transforms[palette_index].append(sign_transform)
+		sign_fixture_indices[palette_index].append(fixture_index)
+		fixture_positions.append(light_position)
+		fixture_sign_positions.append(sign_position)
+		fixture_colors.append(palette[palette_index])
+		fixture_building_indices.append(int(selected_entry["index"]))
+		fixture_buildings.append(building)
+
+		var light := OmniLight3D.new()
+		light.name = "OmniLight%02d" % fixture_index
+		light.position = light_position
+		light.light_color = palette[palette_index]
+		light.light_energy = NEON_LIGHT_ENERGY
+		light.omni_range = NEON_LIGHT_RANGE
+		light.shadow_enabled = false
+		light.set_meta("fixture_index", fixture_index)
+		light.set_meta("sign_position", sign_position)
+		light.set_meta("building_index", int(selected_entry["index"]))
+		neon_root.add_child(light)
+
+	for palette_index in range(palette.size()):
+		if sign_transforms[palette_index].is_empty():
+			continue
+		var signs := _add_multimesh(
+			neon_root,
+			"Signs%s" % color_names[palette_index],
+			CityMeshes.box_mesh(Vector3.ONE, _materials[material_keys[palette_index]]),
+			sign_transforms[palette_index]
+		)
+		signs.set_meta("fixture_indices", sign_fixture_indices[palette_index])
+		signs.set_meta("color", palette[palette_index])
+
+	neon_root.set_meta("fixture_count", selected.size())
+	neon_root.set_meta("fixture_positions", fixture_positions)
+	neon_root.set_meta("fixture_sign_positions", fixture_sign_positions)
+	neon_root.set_meta("fixture_colors", fixture_colors)
+	neon_root.set_meta("fixture_building_indices", fixture_building_indices)
+	neon_root.set_meta("fixture_buildings", fixture_buildings)
+	set_meta("neon_fixture_count", selected.size())
+
+func _select_neon_buildings() -> Array[Dictionary]:
+	var buildings: Array = _layout.get("buildings", [])
+	var candidates_by_bin: Dictionary = {}
+	var eligible_indices: Array[int] = []
+	var city_size := float(_layout.get("city_size", 1.0))
+	var half_extent := float(_layout.get("half_extent", city_size * 0.5))
+
+	for index in range(buildings.size()):
+		var building: Dictionary = buildings[index]
+		if float(building.get("width", 0.0)) <= 0.0 or float(building.get("depth", 0.0)) <= 0.0:
+			continue
+		eligible_indices.append(index)
+		var position: Vector3 = building["position"]
+		var bin_x := clampi(int(floor((position.x + half_extent) / city_size * NEON_BIN_COLUMNS)), 0, NEON_BIN_COLUMNS - 1)
+		var bin_z := clampi(int(floor((position.z + half_extent) / city_size * NEON_BIN_ROWS)), 0, NEON_BIN_ROWS - 1)
+		var bin_index := bin_z * NEON_BIN_COLUMNS + bin_x
+		if not candidates_by_bin.has(bin_index):
+			candidates_by_bin[bin_index] = []
+		var candidates: Array = candidates_by_bin[bin_index]
+		candidates.append(index)
+		candidates_by_bin[bin_index] = candidates
+
+	var selected_indices: Array[int] = []
+	for bin_index in range(NEON_BIN_COLUMNS * NEON_BIN_ROWS):
+		if not candidates_by_bin.has(bin_index):
+			continue
+		var candidates: Array = candidates_by_bin[bin_index]
+		var selected_index := _lowest_neon_rank(candidates)
+		if selected_index >= 0:
+			selected_indices.append(selected_index)
+
+	while selected_indices.size() < NEON_FIXTURE_COUNT:
+		var remaining: Array = []
+		for index in eligible_indices:
+			if not selected_indices.has(index):
+				remaining.append(index)
+		if remaining.is_empty():
+			break
+		var selected_index := _lowest_neon_rank(remaining)
+		if selected_index < 0:
+			break
+		selected_indices.append(selected_index)
+
+	if selected_indices.size() > NEON_FIXTURE_COUNT:
+		selected_indices.resize(NEON_FIXTURE_COUNT)
+	var selected: Array[Dictionary] = []
+	for index in selected_indices:
+		selected.append({"index": index, "building": buildings[index]})
+	return selected
+
+func _lowest_neon_rank(indices: Array) -> int:
+	var selected_index := -1
+	var selected_rank := 2147483647
+	for value in indices:
+		var index := int(value)
+		var rank := _neon_rank(index)
+		if selected_index < 0 or rank < selected_rank or (rank == selected_rank and index < selected_index):
+			selected_index = index
+			selected_rank = rank
+	return selected_index
+
+func _neon_rank(building_index: int) -> int:
+	var key := "%d:%d" % [int(_layout.get("seed", city_seed)), building_index]
+	return int(key.hash()) & 0x7fffffff
+
+func _make_neon_facade(building: Dictionary) -> Dictionary:
+	var position: Vector3 = building["position"]
+	var width := float(building["width"])
+	var depth := float(building["depth"])
+	var height := float(building["height"])
+	var rotation := float(building["rotation"])
+	var yaw_basis := Basis(Vector3.UP, rotation)
+	var nearest_x := _nearest_road_center(position.x)
+	var nearest_z := _nearest_road_center(position.z)
+	var use_x_facade := absf(position.x - nearest_x) < absf(position.z - nearest_z)
+	var local_normal: Vector3
+	var facade_span: float
+	var normal_extent: float
+	var sign_rotation := 0.0
+	if use_x_facade:
+		local_normal = Vector3(-1.0 if nearest_x < position.x else 1.0, 0.0, 0.0)
+		facade_span = depth
+		normal_extent = width * 0.5
+		sign_rotation = PI * 0.5
+	else:
+		local_normal = Vector3(0.0, 0.0, -1.0 if nearest_z < position.z else 1.0)
+		facade_span = width
+		normal_extent = depth * 0.5
+
+	var sign_world_y := clampf(height * 0.66, 2.2, maxf(2.4, height - 0.9))
+	var local_y := sign_world_y - position.y
+	var sign_local_position := Vector3(0.0, local_y, 0.0) + local_normal * (normal_extent + 0.20)
+	var sign_position := position + yaw_basis * sign_local_position
+	var sign_width := clampf(facade_span * 0.52, 2.5, maxf(2.5, facade_span - 1.0))
+	var sign_height := clampf(height * 0.075, 0.65, 1.25)
+	var sign_basis := yaw_basis * Basis(Vector3.UP, sign_rotation)
+	var sign_transform := Transform3D(
+		sign_basis.scaled(Vector3(sign_width, sign_height, 0.12)),
+		sign_position
+	)
+	var light_position := position + yaw_basis * (Vector3(0.0, local_y, 0.0) + local_normal * (normal_extent + 0.85))
+	return {
+		"sign_transform": sign_transform,
+		"light_position": light_position,
+	}
+
+func _nearest_road_center(value: float) -> float:
+	var centers: Array = _layout.get("road_centers", [])
+	var closest := 0.0
+	var closest_distance := INF
+	for center in centers:
+		var distance := absf(value - float(center))
+		if distance < closest_distance:
+			closest_distance = distance
+			closest = float(center)
+	return closest
 
 func _build_parks_and_props() -> void:
 	var parks_root := Node3D.new()
