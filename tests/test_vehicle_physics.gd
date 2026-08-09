@@ -9,6 +9,8 @@ func run() -> Array[Dictionary]:
 	tree.root.add_child(district)
 	tree.root.add_child(player)
 	tree.root.add_child(vehicle)
+	var vehicle_body := vehicle as RigidBody3D
+	_expect(results, "shipped vehicle enables continuous collision detection", vehicle_body != null and int(vehicle_body.continuous_cd) != 0)
 	player.global_position = Vector3(0.0, 1.2, 0.0)
 	vehicle.set("global_position", player.global_position)
 	GameState.reset_run()

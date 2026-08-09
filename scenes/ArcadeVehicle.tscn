@@ -92,6 +92,7 @@ emission_energy_multiplier = 2.0
 [node name="ArcadeVehicle" type="RigidBody3D" groups=["vehicle"]]
 collision_layer = 4
 collision_mask = 11
+continuous_cd = 2
 script = ExtResource("1_vehicle")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
