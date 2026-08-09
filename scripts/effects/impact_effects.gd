@@ -5,6 +5,10 @@ const DECAL_POOL_LIMIT := 32
 const FRAGMENT_POOL_LIMIT := 48
 const FLASH_POOL_LIMIT := 12
 const BLOOD_HIT_POOL_LIMIT := 24
+const SCREEN_SPLASH_POOL_LIMIT := 12
+const SCREEN_SPLASH_FULL_COUNT := 7
+const SCREEN_SPLASH_LIFETIME := 0.9
+const SCREEN_SPLASH_FADE_DURATION := 0.24
 const BLOOD_HIT_FRAME_RATE := 30.0
 const BLOOD_HIT_FRAME_COUNT := 16
 const BLOOD_HIT_DURATION := BLOOD_HIT_FRAME_COUNT / BLOOD_HIT_FRAME_RATE
@@ -17,6 +21,16 @@ const KENNEY_SPLAT_TEXTURES: Array[Texture2D] = [
 	preload("res://assets/vfx/blood/kenney_splat_10.png"),
 	preload("res://assets/vfx/blood/kenney_splat_20.png"),
 ]
+const SCREEN_SPLASH_POSITIONS: Array[Vector2] = [
+	Vector2(0.16, 0.20),
+	Vector2(0.79, 0.22),
+	Vector2(0.35, 0.74),
+	Vector2(0.76, 0.76),
+	Vector2(0.51, 0.18),
+	Vector2(0.17, 0.55),
+	Vector2(0.84, 0.52),
+	Vector2(0.52, 0.82),
+]
 
 var _particle_pool: Array[GPUParticles3D] = []
 var _decal_pool: Array[MeshInstance3D] = []
@@ -24,6 +38,10 @@ var _fragment_pool: Array[MeshInstance3D] = []
 var _flash_pool: Array[OmniLight3D] = []
 var _audio_pool: Array[AudioStreamPlayer3D] = []
 var _blood_hit_pool: Array[Sprite3D] = []
+var _screen_splash_layer: CanvasLayer
+var _screen_splash_pool: Array[Sprite2D] = []
+var _screen_splash_timers: Array[float] = []
+var _screen_splash_opacities: Array[float] = []
 var _decal_meshes: Array[QuadMesh] = []
 var _decal_timers: Array[float] = []
 var _fragment_timers: Array[float] = []
@@ -33,6 +51,7 @@ var _blood_hit_timers: Array[float] = []
 var _fragment_velocities: Array[Vector3] = []
 var _particle_cursor := 0
 var _blood_hit_cursor := 0
+var _screen_splash_cursor := 0
 var _decal_cursor := 0
 var _fragment_cursor := 0
 var _flash_cursor := 0
@@ -64,6 +83,14 @@ func _process(delta: float) -> void:
 			_blood_hit_pool[index].frame = mini(BLOOD_HIT_FRAME_COUNT - 1, int(floor(elapsed * BLOOD_HIT_FRAME_RATE)))
 			if _blood_hit_timers[index] <= 0.0:
 				_blood_hit_pool[index].visible = false
+	for index in _screen_splash_timers.size():
+		if _screen_splash_timers[index] > 0.0:
+			_screen_splash_timers[index] -= delta
+			var remaining := maxf(0.0, _screen_splash_timers[index])
+			if remaining <= SCREEN_SPLASH_FADE_DURATION:
+				_screen_splash_pool[index].modulate.a = _screen_splash_opacities[index] * remaining / SCREEN_SPLASH_FADE_DURATION
+			if _screen_splash_timers[index] <= 0.0:
+				_reset_screen_splash(index)
 	for index in _flash_timers.size():
 		if _flash_timers[index] > 0.0:
 			_flash_timers[index] -= delta
@@ -148,6 +175,22 @@ func _build_pools() -> void:
 		_blood_hit_pool.append(blood_hit)
 		_blood_hit_timers.append(0.0)
 
+	_screen_splash_layer = CanvasLayer.new()
+	_screen_splash_layer.name = "ScreenSplashLayer"
+	_screen_splash_layer.layer = 20
+	add_child(_screen_splash_layer)
+	for index in SCREEN_SPLASH_POOL_LIMIT:
+		var splash := Sprite2D.new()
+		splash.name = "PooledScreenSplash_%02d" % index
+		splash.texture = KENNEY_SPLAT_TEXTURES[index % KENNEY_SPLAT_TEXTURES.size()]
+		splash.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		splash.z_index = 100
+		_reset_screen_splash_visual(splash)
+		_screen_splash_layer.add_child(splash)
+		_screen_splash_pool.append(splash)
+		_screen_splash_timers.append(0.0)
+		_screen_splash_opacities.append(0.0)
+
 	for texture in KENNEY_SPLAT_TEXTURES:
 		var decal_material := StandardMaterial3D.new()
 		decal_material.albedo_color = Color(0.62, 0.012, 0.008, 0.88)
@@ -194,6 +237,8 @@ func _on_impact(event: ImpactEvent) -> void:
 		var blood_hit_count := 2 if is_vehicle and settings.preset == ViolenceSettings.Preset.FULL else 1
 		for _index in blood_hit_count:
 			_spawn_blood_hit(position, settings.blood_particle_density, is_vehicle)
+	if is_vehicle and settings.blood_particles_enabled:
+		_spawn_screen_splashes(settings.blood_particle_density)
 	if event.speed >= 5.0 and not _flash_pool.is_empty():
 		var flash := _flash_pool[_flash_cursor]
 		_flash_cursor = (_flash_cursor + 1) % _flash_pool.size()
@@ -244,6 +289,57 @@ func _spawn_blood_hit(position: Vector3, density: float, is_vehicle: bool) -> vo
 	blood_hit.scale = Vector3.ONE * intensity
 	blood_hit.visible = true
 	_blood_hit_timers[index] = BLOOD_HIT_DURATION
+
+func _spawn_screen_splashes(density: float) -> void:
+	if _screen_splash_pool.is_empty():
+		return
+	var clamped_density := clampf(density, 0.0, 1.0)
+	if clamped_density <= 0.0:
+		return
+	var splash_count := maxi(1, ceili(float(SCREEN_SPLASH_FULL_COUNT) * clamped_density))
+	for variation in splash_count:
+		_spawn_screen_splash(variation, clamped_density)
+
+func _spawn_screen_splash(variation: int, density: float) -> void:
+	var index := _screen_splash_cursor
+	_screen_splash_cursor = (_screen_splash_cursor + 1) % _screen_splash_pool.size()
+	var splash := _screen_splash_pool[index]
+	var variation_index := index + variation
+	splash.texture = KENNEY_SPLAT_TEXTURES[variation_index % KENNEY_SPLAT_TEXTURES.size()]
+	var viewport_size := get_viewport().get_visible_rect().size
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		viewport_size = Vector2(1280.0, 720.0)
+	var base_position := SCREEN_SPLASH_POSITIONS[variation_index % SCREEN_SPLASH_POSITIONS.size()]
+	var jitter := Vector2(
+		sin(float(variation_index) * 1.71) * 0.035,
+		cos(float(variation_index) * 1.23) * 0.035
+	)
+	splash.position = Vector2(
+		clampf((base_position.x + jitter.x) * viewport_size.x, 0.0, viewport_size.x),
+		clampf((base_position.y + jitter.y) * viewport_size.y, 0.0, viewport_size.y)
+	)
+	var texture_size := splash.texture.get_size()
+	var target_size := minf(viewport_size.x, viewport_size.y) * (0.46 + density * 0.10)
+	var scale_variation := 0.84 + float(variation_index % 4) * 0.12
+	splash.scale = Vector2.ONE * target_size / maxf(texture_size.x, texture_size.y) * scale_variation
+	splash.rotation = deg_to_rad(float((variation_index * 47) % 360 - 180))
+	var opacity := (0.62 + float(variation_index % 3) * 0.08) * (0.82 + density * 0.18)
+	splash.modulate = Color(0.76, 0.018, 0.01, opacity)
+	splash.visible = true
+	_screen_splash_timers[index] = SCREEN_SPLASH_LIFETIME
+	_screen_splash_opacities[index] = opacity
+
+func _reset_screen_splash(index: int) -> void:
+	_screen_splash_timers[index] = 0.0
+	_screen_splash_opacities[index] = 0.0
+	_reset_screen_splash_visual(_screen_splash_pool[index])
+
+func _reset_screen_splash_visual(splash: Sprite2D) -> void:
+	splash.visible = false
+	splash.position = Vector2.ZERO
+	splash.scale = Vector2.ONE
+	splash.rotation = 0.0
+	splash.modulate = Color(1.0, 1.0, 1.0, 0.0)
 
 func _spawn_decal(position: Vector3, is_vehicle: bool, variation: int) -> void:
 	if _decal_pool.is_empty() or _decal_meshes.is_empty():

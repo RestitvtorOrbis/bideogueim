@@ -426,12 +426,16 @@ func _test_effects_and_ui(results: Array[Dictionary]) -> void:
 	var fragment_pool: Array = effects.get("_fragment_pool")
 	var audio_pool: Array = effects.get("_audio_pool")
 	var blood_hit_pool: Array = effects.get("_blood_hit_pool")
+	var screen_splash_layer: CanvasLayer = effects.get("_screen_splash_layer")
+	var screen_splash_pool: Array = effects.get("_screen_splash_pool")
 	var decal_meshes: Array = effects.get("_decal_meshes")
 	_expect(results, "impact particle pool has a hard limit", particle_pool.size() == 24)
 	_expect(results, "impact decal pool has a hard limit", decal_pool.size() == 32)
 	_expect(results, "impact fragment pool has a hard limit", fragment_pool.size() == 48)
 	_expect(results, "impact audio pool has a hard limit", audio_pool.size() == 8)
 	_expect(results, "animated blood-hit pool has a hard limit", blood_hit_pool.size() == 24)
+	_expect(results, "screen splash pool has a hard limit", screen_splash_pool.size() == 12)
+	_expect(results, "screen splash pool is owned by a CanvasLayer", screen_splash_layer != null and screen_splash_layer.get_parent() == effects and screen_splash_layer.get_child_count() == screen_splash_pool.size())
 	_expect(results, "retained Kenney splats share three decal meshes", decal_meshes.size() == 3)
 	var source := Node3D.new()
 	tree.root.add_child(source)
@@ -444,6 +448,12 @@ func _test_effects_and_ui(results: Array[Dictionary]) -> void:
 		if particle.emitting:
 			disabled_particles = true
 	_expect(results, "disabled preset emits no impact particles", not disabled_particles)
+	var disabled_screen_splats := false
+	for splash in screen_splash_pool:
+		if splash.visible:
+			disabled_screen_splats = true
+			break
+	_expect(results, "disabled preset emits no screen splats", not disabled_screen_splats and int(effects.get("_screen_splash_cursor")) == 0)
 	SettingsService.violence.apply_preset(ViolenceSettings.Preset.FULL)
 	effects.call("_on_impact", impact)
 	var full_particles := false
@@ -452,9 +462,24 @@ func _test_effects_and_ui(results: Array[Dictionary]) -> void:
 			full_particles = true
 		break
 	_expect(results, "full preset emits impact particles", full_particles)
+	var full_screen_splat_count := 0
+	var first_screen_splash_alpha := 0.0
+	for splash in screen_splash_pool:
+		if splash.visible:
+			full_screen_splat_count += 1
+			if is_zero_approx(first_screen_splash_alpha):
+				first_screen_splash_alpha = splash.modulate.a
+	_expect(results, "full vehicle impact activates several screen splats", full_screen_splat_count >= 3)
 	var projectile_particle_index := int(effects.get("_particle_cursor"))
+	var projectile_screen_splash_cursor := int(effects.get("_screen_splash_cursor"))
+	var projectile_screen_splat_count_before := full_screen_splat_count
 	var projectile_impact := ImpactEvent.new("effect-projectile", "Hostile", source, 12.0, Vector3.FORWARD, 2.0, true, false, Vector3(1.0, 0.5, 0.0), &"projectile")
 	effects.call("_on_impact", projectile_impact)
+	var projectile_screen_splat_count := 0
+	for splash in screen_splash_pool:
+		if splash.visible:
+			projectile_screen_splat_count += 1
+	_expect(results, "projectile impact emits no screen splats", projectile_screen_splat_count == projectile_screen_splat_count_before and int(effects.get("_screen_splash_cursor")) == projectile_screen_splash_cursor)
 	var projectile_particle_amount := int(particle_pool[projectile_particle_index].amount)
 	var vehicle_particle_index := int(effects.get("_particle_cursor"))
 	effects.call("_on_impact", impact)
@@ -478,6 +503,20 @@ func _test_effects_and_ui(results: Array[Dictionary]) -> void:
 	_expect(results, "full preset shows impact decals", full_decals)
 	_expect(results, "full preset shows impact fragments", full_fragments)
 	_expect(results, "full preset plays impact audio", full_audio)
+	effects.call("_process", 0.75)
+	var fading_screen_splat := false
+	for splash in screen_splash_pool:
+		if splash.visible and splash.modulate.a < first_screen_splash_alpha:
+			fading_screen_splat = true
+			break
+	_expect(results, "screen splats fade before they hide", fading_screen_splat)
+	effects.call("_process", 0.20)
+	var expired_screen_splats := false
+	for splash in screen_splash_pool:
+		if splash.visible:
+			expired_screen_splats = true
+			break
+	_expect(results, "screen splats hide after a finite lifetime", not expired_screen_splats)
 	var shake_count: Array[int] = [0]
 	var shake_handler := func(_intensity: float) -> void: shake_count[0] += 1
 	CameraShake.shake_requested.connect(shake_handler)
