@@ -13,8 +13,12 @@ extends Node3D
 const NEON_FIXTURE_COUNT := 8
 const NEON_BIN_COLUMNS := 4
 const NEON_BIN_ROWS := 2
-const NEON_LIGHT_RANGE := 20.0
-const NEON_LIGHT_ENERGY := 7.0
+const NEON_LIGHT_RANGE := 28.0
+const NEON_LIGHT_ENERGY := 9.0
+const STREET_LAMP_LIGHT_COUNT := 24
+const STREET_LAMP_LIGHT_RANGE := 22.0
+const STREET_LAMP_LIGHT_ENERGY := 2.6
+const STREET_LAMP_LIGHT_COLOR := Color("#ffb35c")
 
 var _layout: Dictionary = {}
 var _materials: Dictionary = {}
@@ -651,8 +655,42 @@ func _build_parks_and_props() -> void:
 	lamp_field.name = "LampCollision"
 	props_root.add_child(lamp_field)
 	lamp_field.configure(lamp_transforms, lamp_glow_transforms, lamp_posts, lamp_glows)
+	_build_street_lamp_lights(props_root, lamp_field, lamp_glow_transforms)
 	set_meta("lamp_count", lamp_transforms.size())
 	set_meta("lamp_shape_count", lamp_field.get_collision_shape_count())
+
+
+func _build_street_lamp_lights(parent: Node3D, lamp_field: LampField, glow_transforms: Array) -> void:
+	var light_root := Node3D.new()
+	light_root.name = "StreetLampLights"
+	parent.add_child(light_root)
+	var light_count := mini(STREET_LAMP_LIGHT_COUNT, glow_transforms.size())
+	var lamp_indices: Array[int] = []
+	if light_count > 0:
+		for light_index in range(light_count):
+			var lamp_index := 0
+			if light_count > 1:
+				lamp_index = int(round(float(light_index) * float(glow_transforms.size() - 1) / float(light_count - 1)))
+			lamp_indices.append(lamp_index)
+			var glow_transform: Transform3D = glow_transforms[lamp_index]
+			var light := OmniLight3D.new()
+			light.name = "OmniLight%02d" % light_index
+			light.transform = Transform3D(glow_transform.basis.orthonormalized(), glow_transform.origin)
+			light.light_color = STREET_LAMP_LIGHT_COLOR
+			light.light_energy = STREET_LAMP_LIGHT_ENERGY
+			light.omni_range = STREET_LAMP_LIGHT_RANGE
+			light.shadow_enabled = false
+			light.set_meta("light_index", light_index)
+			light.set_meta("lamp_index", lamp_index)
+			light_root.add_child(light)
+			lamp_field.register_glow_light(lamp_index, light)
+	light_root.set_meta("light_count", light_count)
+	light_root.set_meta("lamp_indices", lamp_indices)
+	light_root.set_meta("light_energy", STREET_LAMP_LIGHT_ENERGY)
+	light_root.set_meta("light_range", STREET_LAMP_LIGHT_RANGE)
+	light_root.set_meta("light_color", STREET_LAMP_LIGHT_COLOR)
+	set_meta("street_lamp_light_count", light_count)
+	set_meta("street_lamp_light_indices", lamp_indices)
 
 func _build_navigation() -> void:
 	var nav_region := get_node_or_null("NavigationRegion3D") as NavigationRegion3D

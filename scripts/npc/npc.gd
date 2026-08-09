@@ -16,6 +16,9 @@ const HUMAN_CHARACTER_CATALOG := preload("res://resources/human_character_catalo
 const CIVILIAN_VISUAL_HEIGHTS: Array[float] = [1.68, 1.74, 1.80, 1.86]
 const HOSTILE_VISUAL_HEIGHTS: Array[float] = [1.78, 1.86]
 const VISUAL_YAW_RESPONSE: float = 12.0
+const GROUNDING_RAY_START_OFFSET: float = 2.0
+const GROUNDING_RAY_END_Y: float = -2.0
+const GROUNDING_CLEARANCE: float = 0.02
 
 @export var civilian_profile: NpcProfile
 @export var hostile_profile: NpcProfile
@@ -96,7 +99,7 @@ func activate(
 	_hostile_flee_target = null
 	_hostile_awareness_time_left = _get_hostile_awareness_phase(new_lifecycle_id)
 	_died = false
-	global_position = spawn_position
+	global_position = _resolve_grounded_spawn_position(spawn_position)
 	velocity = Vector3.ZERO
 	_visual_yaw = 0.0
 	if human_visual != null:
@@ -459,6 +462,26 @@ func _move_toward(destination: Vector3, delta: float, speed: float) -> void:
 	move_and_slide()
 	_update_visual_orientation(delta)
 	_enforce_safe_radius()
+
+
+func _resolve_grounded_spawn_position(requested_position: Vector3) -> Vector3:
+	var grounded_position := requested_position
+	var world := get_world_3d()
+	if world == null or world.direct_space_state == null:
+		return grounded_position
+	var ray_start := requested_position + Vector3.UP * GROUNDING_RAY_START_OFFSET
+	var ray_end := Vector3(requested_position.x, GROUNDING_RAY_END_Y, requested_position.z)
+	if ray_start.y <= ray_end.y:
+		return grounded_position
+	var query := PhysicsRayQueryParameters3D.create(ray_start, ray_end, 1)
+	query.exclude = [get_rid()]
+	var hit := world.direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return grounded_position
+	var hit_position: Variant = hit.get("position", null)
+	if hit_position is Vector3:
+		grounded_position.y = (hit_position as Vector3).y + GROUNDING_CLEARANCE
+	return grounded_position
 
 func _select_wander_target() -> void:
 	var center := global_position

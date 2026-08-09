@@ -599,8 +599,24 @@ func _apply_palette_materials() -> void:
 	if not is_instance_valid(_body_instance):
 		return
 	for mesh_instance in _find_mesh_instances(_body_instance):
-		var slot := _palette_slot_for_mesh(mesh_instance)
-		mesh_instance.material_override = get_palette_material(slot)
+		var mesh := mesh_instance.mesh
+		if mesh == null:
+			continue
+		mesh_instance.material_override = null
+		for surface_index in range(mesh.get_surface_count()):
+			var source_material := mesh.surface_get_material(surface_index)
+			if not source_material is StandardMaterial3D:
+				continue
+			var source_standard_material := source_material as StandardMaterial3D
+			var slot := _palette_slot_for_surface(mesh_instance, source_standard_material)
+			var palette_material := _get_cached_textured_palette_material(
+				mesh_instance,
+				surface_index,
+				source_standard_material,
+				slot
+			)
+			if palette_material != null:
+				mesh_instance.set_surface_override_material(surface_index, palette_material)
 
 
 func _find_mesh_instances(node: Node) -> Array[MeshInstance3D]:
@@ -612,14 +628,64 @@ func _find_mesh_instances(node: Node) -> Array[MeshInstance3D]:
 	return meshes
 
 
-func _palette_slot_for_mesh(mesh_instance: MeshInstance3D) -> StringName:
+func _get_cached_textured_palette_material(
+		mesh_instance: MeshInstance3D,
+		surface_index: int,
+		source_material: StandardMaterial3D,
+		slot: StringName
+	) -> StandardMaterial3D:
+	var key := _textured_palette_cache_key(mesh_instance, surface_index, source_material, slot)
+	var cache := _get_palette_material_cache()
+	if cache.has(key):
+		return cache[key] as StandardMaterial3D
+	var palette_material := source_material.duplicate() as StandardMaterial3D
+	if palette_material == null:
+		return null
+	var normalized_slot := _normalize_palette_slot(slot)
+	palette_material.resource_name = "HumanTexturedPalette_%s_%d_%s_%d_%s" % [
+		String(_palette_id),
+		_body_variant_index,
+		String(normalized_slot),
+		surface_index,
+		mesh_instance.name,
+	]
+	palette_material.albedo_color = source_material.albedo_color * _palette_color(_palette_id, normalized_slot)
+	cache[key] = palette_material
+	return palette_material
+
+
+func _textured_palette_cache_key(
+		mesh_instance: MeshInstance3D,
+		surface_index: int,
+		source_material: StandardMaterial3D,
+		slot: StringName
+	) -> String:
+	var source_id := source_material.resource_path
+	if source_id.is_empty():
+		source_id = source_material.resource_name
+	if source_id.is_empty():
+		source_id = "instance_%d" % source_material.get_instance_id()
+	return "textured|%s|%s|%d|%s|%s|%d|%s|%s" % [
+		String(_role),
+		String(_palette_id),
+		_body_variant_index,
+		_selected_body_path,
+		source_id,
+		surface_index,
+		mesh_instance.name,
+		String(_normalize_palette_slot(slot)),
+	]
+
+
+func _palette_slot_for_surface(mesh_instance: MeshInstance3D, source_material: StandardMaterial3D) -> StringName:
 	var mesh_name := mesh_instance.name.to_lower()
-	if mesh_name.contains("hair") or mesh_name.contains("brow") or mesh_name.contains("beard"):
+	var material_name := source_material.resource_name.to_lower()
+	if material_name.contains("hair") or material_name.contains("brow") or material_name.contains("beard") or mesh_name.contains("hair") or mesh_name.contains("brow") or mesh_name.contains("beard"):
 		return &"hair"
-	if mesh_name.contains("face") or mesh_name.contains("skin"):
-		return &"skin"
-	if mesh_name.contains("eye"):
+	if material_name.contains("eye") or mesh_name.contains("eye"):
 		return &"accent"
+	if material_name.contains("skin") or mesh_name.contains("skin") or mesh_name.contains("face"):
+		return &"skin"
 	return &"body"
 
 

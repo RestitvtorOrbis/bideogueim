@@ -70,7 +70,7 @@ static func make_materials() -> Dictionary:
 		"trunk": _solid_material(Color("#5b3f2b"), 0.98),
 		"leaves": _noise_material(Color("#367b54"), 0.88, 0.3, 0.18),
 		"lamp": _solid_material(Color("#27313b"), 0.72),
-		"lamp_glow": _emissive_material(Color("#ffd891"), Color("#ffb548"), 0.9),
+		"lamp_glow": _emissive_material(Color("#ffd891"), Color("#ffb35c"), 1.1),
 		"bench": _solid_material(Color("#76543a"), 0.9),
 		"planter": _solid_material(Color("#5b6668"), 0.86),
 	}

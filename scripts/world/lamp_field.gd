@@ -31,6 +31,7 @@ var _contact_active := PackedByteArray()
 var _collision_disabled := PackedByteArray()
 var _bend_axes := PackedVector3Array()
 var _bend_directions := PackedVector3Array()
+var _glow_lights: Dictionary = {}
 var _initialized := false
 
 
@@ -100,6 +101,14 @@ func configure(
 
 	_initialized = true
 	set_physics_process(true)
+
+
+func register_glow_light(lamp_index: int, light: OmniLight3D) -> bool:
+	if not _initialized or not _is_valid_shape_index(lamp_index) or light == null:
+		return false
+	_glow_lights[lamp_index] = light
+	light.transform = _light_transform_for_glow(_glow_transforms[lamp_index])
+	return true
 
 
 func receive_vehicle_contact(
@@ -334,6 +343,13 @@ func _update_lamp_transforms(lamp_index: int) -> void:
 	)
 	_glow_multimesh.set_instance_transform(lamp_index, glow_transform)
 	_glow_transforms[lamp_index] = glow_transform
+	var glow_light: Variant = _glow_lights.get(lamp_index, null)
+	if glow_light is OmniLight3D and is_instance_valid(glow_light):
+		(glow_light as OmniLight3D).transform = _light_transform_for_glow(glow_transform)
+
+
+func _light_transform_for_glow(glow_transform: Transform3D) -> Transform3D:
+	return Transform3D(glow_transform.basis.orthonormalized(), glow_transform.origin)
 
 
 func _get_away_direction(lamp_index: int, vehicle_position: Vector3, impulse_proxy: Vector3) -> Vector3:
@@ -370,6 +386,7 @@ func _is_valid_vehicle(vehicle: Node) -> bool:
 
 
 func _exit_tree() -> void:
+	_glow_lights.clear()
 	if _body_rid.is_valid():
 		PhysicsServer3D.body_clear_shapes(_body_rid)
 	if _shared_shape_rid.is_valid():
