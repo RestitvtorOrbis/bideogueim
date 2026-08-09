@@ -44,7 +44,7 @@ func _ready() -> void:
 		ray.collision_mask = 1
 
 func _physics_process(_delta: float) -> void:
-	if GameState.is_game_over:
+	if _is_game_over():
 		return
 	_apply_suspension()
 	if occupied_driver == null:
@@ -75,6 +75,24 @@ func _physics_process(_delta: float) -> void:
 	if Input.is_action_just_pressed("interact_vehicle"):
 		exit_vehicle()
 
+func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	var contact_count := state.get_contact_count()
+	if contact_count <= 0:
+		return
+	var speed := state.linear_velocity.length()
+	var impulse_proxy := state.linear_velocity * mass * state.step
+	for contact_index in range(contact_count):
+		var collider := state.get_contact_collider_object(contact_index)
+		if collider == null or not collider.has_method("receive_vehicle_contact"):
+			continue
+		var collider_shape_index := state.get_contact_collider_shape(contact_index)
+		if collider_shape_index < 0:
+			continue
+		var impulse := state.get_contact_impulse(contact_index)
+		if impulse.length_squared() < 0.000001:
+			impulse = impulse_proxy
+		collider.receive_vehicle_contact(self, collider_shape_index, state.transform.origin, speed, impulse, state.step)
+
 func _should_apply_forward_brake(brake_reverse_pressed: bool, forward_speed: float) -> bool:
 	return brake_reverse_pressed and forward_speed > 0.5
 
@@ -100,7 +118,7 @@ func _limit_speed() -> void:
 		linear_velocity = linear_velocity.normalized() * config.maximum_speed
 
 func try_enter(player: Node) -> bool:
-	if player == null or occupied_driver != null or GameState.is_game_over:
+	if player == null or occupied_driver != null or _is_game_over():
 		return false
 	if global_position.distance_to(player.global_position) > 4.0:
 		return false
@@ -163,7 +181,7 @@ func apply_damage(amount: float) -> void:
 	health.apply_damage(amount)
 
 func get_damage_target() -> Node:
-	return self if not GameState.is_game_over else null
+	return self if not _is_game_over() else null
 
 func _on_body_entered(body: Node) -> void:
 	var speed := linear_velocity.length()
@@ -178,7 +196,16 @@ func _on_health_changed(current: float, maximum: float) -> void:
 	health_changed.emit(current, maximum)
 
 func _on_destroyed() -> void:
-	if GameState.is_game_over:
+	if _is_game_over():
 		return
 	destroyed.emit()
-	GameState.finish_run()
+	_finish_run()
+
+func _is_game_over() -> bool:
+	var game_state := get_node_or_null("/root/GameState")
+	return game_state != null and bool(game_state.get("is_game_over"))
+
+func _finish_run() -> void:
+	var game_state := get_node_or_null("/root/GameState")
+	if game_state != null and game_state.has_method("finish_run"):
+		game_state.call("finish_run")

@@ -35,11 +35,23 @@ func _run() -> void:
 	_expect("building collision is batched", district_a.get_node_or_null("BuildingBlocks/Collision/CollisionShape3D") != null)
 	var navigation_region := district_a.get_node_or_null("NavigationRegion3D") as NavigationRegion3D
 	_expect("navigation region has generated navigation data", navigation_region != null and navigation_region.navigation_mesh != null)
-	_expect("repeated geometry uses MultiMesh", district_a.get_node_or_null("BuildingBlocks/Style0") is MultiMeshInstance3D and district_a.get_node_or_null("StreetFurniture/LampPosts") is MultiMeshInstance3D)
+	var lamp_field := district_a.get_node_or_null("StreetFurniture/LampCollision") as LampField
+	var lamp_posts := district_a.get_node_or_null("StreetFurniture/LampPosts") as MultiMeshInstance3D
+	var lamp_glows := district_a.get_node_or_null("StreetFurniture/LampGlows") as MultiMeshInstance3D
+	_expect("repeated geometry uses MultiMesh", district_a.get_node_or_null("BuildingBlocks/Style0") is MultiMeshInstance3D and lamp_posts != null and lamp_glows != null)
+	_expect("every generated lamp has one collision shape", lamp_field != null and lamp_field.get_lamp_count() > 0 and lamp_field.get_collision_shape_count() == lamp_field.get_lamp_count())
+	_expect("lamp render and collision indices are stable", lamp_field != null and lamp_posts != null and lamp_glows != null and lamp_posts.multimesh.instance_count == lamp_field.get_lamp_count() and lamp_glows.multimesh.instance_count == lamp_field.get_lamp_count() and lamp_field.get_lamp_index_for_shape(0) == 0)
 	_expect("scene tree stays compact", _count_nodes(district_a) < 180)
 
-	var player := preload("res://scenes/Player.tscn").instantiate() as CharacterBody3D
+	var vehicle_script := load("res://scripts/vehicle/arcade_vehicle.gd") as GDScript
 	var vehicle := preload("res://scenes/ArcadeVehicle.tscn").instantiate() as RigidBody3D
+	if vehicle_script == null or vehicle == null or vehicle.get_script() == null or not vehicle.has_method("try_enter"):
+		_expect("vehicle script loads and exposes try_enter", false)
+		if vehicle != null:
+			vehicle.free()
+		_finish_city_test()
+		return
+	var player := preload("res://scenes/Player.tscn").instantiate() as CharacterBody3D
 	root.add_child(player)
 	root.add_child(vehicle)
 	player.global_position = player_spawn_a
@@ -61,12 +73,7 @@ func _run() -> void:
 	district_a.queue_free()
 	district_b.queue_free()
 	await process_frame
-	var failed := 0
-	for result in _results:
-		if not result["passed"]:
-			failed += 1
-		print("[CITY] %s: %s" % ["PASS" if result["passed"] else "FAIL", result["name"]])
-	quit(1 if failed > 0 else 0)
+	_finish_city_test()
 
 func _count_nodes(node: Node) -> int:
 	var count := 1
@@ -76,3 +83,11 @@ func _count_nodes(node: Node) -> int:
 
 func _expect(name: String, passed: bool) -> void:
 	_results.append({"name": name, "passed": passed})
+
+func _finish_city_test() -> void:
+	var failed := 0
+	for result in _results:
+		if not result["passed"]:
+			failed += 1
+		print("[CITY] %s: %s" % ["PASS" if result["passed"] else "FAIL", result["name"]])
+	quit(1 if failed > 0 else 0)

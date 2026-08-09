@@ -322,8 +322,14 @@ func _build_parks_and_props() -> void:
 				lamp_transforms.append(Transform3D(Basis.IDENTITY.scaled(Vector3(0.12, 1.8, 0.12)), vertical_position))
 				lamp_glow_transforms.append(Transform3D(Basis.IDENTITY.scaled(Vector3(0.24, 0.24, 0.24)), horizontal_position + Vector3.UP * 1.8))
 				lamp_glow_transforms.append(Transform3D(Basis.IDENTITY.scaled(Vector3(0.24, 0.24, 0.24)), vertical_position + Vector3.UP * 1.8))
-	_add_multimesh(props_root, "LampPosts", CityMeshes.cylinder_mesh(1.0, 2.0, _materials["lamp"]), lamp_transforms)
-	_add_multimesh(props_root, "LampGlows", CityMeshes.sphere_mesh(1.0, _materials["lamp_glow"]), lamp_glow_transforms)
+	var lamp_posts := _add_multimesh(props_root, "LampPosts", CityMeshes.cylinder_mesh(1.0, 2.0, _materials["lamp"]), lamp_transforms)
+	var lamp_glows := _add_multimesh(props_root, "LampGlows", CityMeshes.sphere_mesh(1.0, _materials["lamp_glow"]), lamp_glow_transforms)
+	var lamp_field := LampField.new()
+	lamp_field.name = "LampCollision"
+	props_root.add_child(lamp_field)
+	lamp_field.configure(lamp_transforms, lamp_glow_transforms, lamp_posts, lamp_glows)
+	set_meta("lamp_count", lamp_transforms.size())
+	set_meta("lamp_shape_count", lamp_field.get_collision_shape_count())
 
 func _build_navigation() -> void:
 	var nav_region := get_node_or_null("NavigationRegion3D") as NavigationRegion3D
@@ -370,13 +376,14 @@ func _add_spawn_marker(parent: Node3D, marker_name: String, position: Vector3, g
 	marker.add_to_group(group_name)
 	parent.add_child(marker)
 
-func _add_multimesh(parent: Node, node_name: String, mesh: Mesh, transforms: Array) -> void:
+func _add_multimesh(parent: Node, node_name: String, mesh: Mesh, transforms: Array) -> MultiMeshInstance3D:
 	if transforms.is_empty():
-		return
+		return null
 	var instance := MultiMeshInstance3D.new()
 	instance.name = node_name
 	instance.multimesh = CityMeshes.make_multimesh(mesh, transforms)
 	parent.add_child(instance)
+	return instance
 
 func _append_building_windows(building: Dictionary, output: Array) -> void:
 	var position: Vector3 = building["position"]
