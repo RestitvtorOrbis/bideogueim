@@ -200,6 +200,19 @@ func _test_world_and_vehicle(results: Array[Dictionary]) -> void:
 	tree.root.add_child(vehicle)
 	player.global_position = Vector3(4.0, 1.2, 4.0)
 	vehicle.set("global_position", player.global_position)
+	var imported_model := vehicle.get_node_or_null("IgnitionLabsCar") as MeshInstance3D
+	var imported_resource := load("res://assets/vehicles/ignition_labs_car/Lamborghini_Aventador.obj") as Mesh
+	_expect(results, "vehicle uses the Ignition Labs imported OBJ", imported_model != null and imported_resource != null and imported_model.mesh == imported_resource)
+	_expect(results, "imported vehicle model keeps the accepted scale and offset", imported_model != null and imported_model.scale == Vector3(0.009, 0.009, 0.009) and imported_model.position == Vector3(0.176, 0.0, 0.243))
+	var primitive_visual_names := ["BodyMesh", "CabinMesh", "Hood", "Roof", "AccentStrip", "Headlights", "RearLights", "WheelVisualFrontLeft", "WheelVisualFrontRight", "WheelVisualRearLeft", "WheelVisualRearRight", "HubVisualFrontLeft", "HubVisualFrontRight", "HubVisualRearLeft", "HubVisualRearRight"]
+	var primitive_visuals_absent := true
+	for primitive_name in primitive_visual_names:
+		if vehicle.get_node_or_null(primitive_name) != null:
+			primitive_visuals_absent = false
+	_expect(results, "primitive vehicle visual kit is absent", primitive_visuals_absent)
+	var vehicle_collision := vehicle.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	var vehicle_box := vehicle_collision.shape as BoxShape3D if vehicle_collision != null else null
+	_expect(results, "vehicle collision footprint is preserved", vehicle_collision != null and vehicle_collision.position == Vector3(0, 0.55, 0) and vehicle_box != null and vehicle_box.size == Vector3(2.1, 0.75, 4.2))
 	var wheel_rays: Array[Node] = vehicle.find_children("*", "RayCast3D", true, false)
 	var player_health := player.get_node("HealthComponent") as HealthComponent
 	var vehicle_health := vehicle.get_node("HealthComponent") as HealthComponent
@@ -212,6 +225,18 @@ func _test_world_and_vehicle(results: Array[Dictionary]) -> void:
 		if ray == null or ray.target_position.y >= 0.0 or ray.collision_mask != 1:
 			suspension_wiring_valid = false
 	_expect(results, "suspension raycasts target the world", suspension_wiring_valid)
+	var wheel_marker_positions := {
+		"WheelFrontLeft": Vector3(-0.92, 0.35, -1.35),
+		"WheelFrontRight": Vector3(0.92, 0.35, -1.35),
+		"WheelRearLeft": Vector3(-0.92, 0.35, 1.35),
+		"WheelRearRight": Vector3(0.92, 0.35, 1.35)
+	}
+	var wheel_markers_preserved := true
+	for marker_name in wheel_marker_positions:
+		var marker := vehicle.get_node_or_null(marker_name) as Marker3D
+		if marker == null or marker.position != wheel_marker_positions[marker_name]:
+			wheel_markers_preserved = false
+	_expect(results, "wheel marker positions are preserved", wheel_markers_preserved)
 	_expect(results, "vehicle entry requires proximity", bool(vehicle.call("try_enter", player)))
 	_expect(results, "vehicle entry assigns the driver", vehicle.get("occupied_driver") == player and player.get("occupied_vehicle") == vehicle)
 	_expect(results, "vehicle entry activates vehicle camera", bool(vehicle.get_node("CameraRig/SpringArm3D/Camera3D").current))

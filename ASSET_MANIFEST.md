@@ -1,5 +1,26 @@
 # Asset Manifest
 
+## FEATURE-02 - Ignition Labs vehicle model
+
+Source: [CAR Model](https://poly.pizza/m/5zUWP5UsLg-) by Ignition Labs, published 2018-08-16 via Poly Pizza. License: Creative Commons Attribution.
+
+The supplied source archive was inspected but is not retained in the project assets and is not modified:
+
+| Source archive | Exact size | SHA-256 |
+|---|---:|---|
+| `CAR Model by Ignition Labs - 5zUWP5UsLg-.zip` | 753,396 bytes | `6F98750B8E2CD96EE79E5F6969344CD9D4129ED8EB69E45668E3B99AAB352EA1` |
+
+Only these four payload files are retained under `assets/vehicles/ignition_labs_car/`:
+
+| Retained file | Exact size | SHA-256 | Modification |
+|---|---:|---|---|
+| `Lamborghini_Aventador.obj` | 592,760 bytes | `4ED9485C5A5C8EF7E526FB38C1AC2ED012FE0926633F3401F609DDE5D305C375` | None; vendor OBJ bytes unchanged. |
+| `Lamborghini_Aventador.mtl` | 726 bytes | `94875AC6DA58920570DBA17B7F7117FEC1483BEFD349D08F5B5AA4528C2F3493` | Only texture map paths normalized for portable local import. |
+| `Lamborginhi Aventador_diffuse.jpeg` | 330,994 bytes | `B3BEF9675E07040AE0C84D99DB6367ED0040703F4F8A98D8F73394D7F230967D` | None; vendor JPEG bytes unchanged. |
+| `Lamborginhi Aventador_spec.jpeg` | 319,289 bytes | `FDD0EDC191142048047541352B9205AC9305A251A9A644BFDFFE9A947EC8101E` | None; vendor JPEG bytes unchanged. |
+
+The three vendor MTL references using absolute `E:\\car\\...` paths were replaced with the retained local basenames `Lamborginhi Aventador_diffuse.jpeg` and `Lamborginhi Aventador_spec.jpeg`. No geometry, material values, or JPEG pixels were changed.
+
 ## Política de procedencia
 
 Los mapas PBR externos de esta iteración proceden de páginas oficiales de Poly Haven. Cada página identifica al autor y muestra licencia CC0; los JPG 1K se descargaron sin modificaciones y se conservan dentro de `assets/textures/**`. Los materiales se conectan desde `scripts/world/city_meshes.gd` usando albedo, normal OpenGL (`nor_gl`) y roughness. Los assets procedurales originales anteriores siguen dedicados a dominio público bajo [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
@@ -19,7 +40,7 @@ Los mapas PBR externos de esta iteración proceden de páginas oficiales de Poly
 | Procedural city generation | No external source; generated at runtime | Urban Drive Prototype team | CC0 1.0 dedication | Seeded road grid, sidewalks, varied buildings, parks, street furniture, shared materials, collisions, navigation and distributed spawn points | `scripts/world/district.gd`, `scripts/world/city_layout.gd`, `scripts/world/city_meshes.gd`, `scenes/District.tscn` |
 | Player hard-surface character kit | No external source; original Godot primitive meshes | Urban Drive Prototype team | CC0 1.0 dedication | Added armor plate, shoulder pods, boots, neck, emissive chest core and visor; camera rig is top-level and follows position only to prevent accumulated yaw | `scenes/Player.tscn`, `scripts/visual/player_visuals.gd` |
 | NPC modular character kit | No external source; original Godot primitive meshes | Urban Drive Prototype team | CC0 1.0 dedication | Added head, jacket, shoes, emissive accent bar and pulse controller; existing role palette override remains supported | `scenes/Npc.tscn`, `scripts/visual/npc_visuals.gd` |
-| Arcade vehicle hard-surface kit | No external source; original Godot primitive meshes | Urban Drive Prototype team | CC0 1.0 dedication | Added hood, roof, glass separation, accent strip, tail lights, visible tires and hubs; existing vehicle camera hierarchy is preserved | `scenes/ArcadeVehicle.tscn`, `scripts/visual/vehicle_visuals.gd` |
+| Arcade vehicle visual | [CAR Model](https://poly.pizza/m/5zUWP5UsLg-) | Ignition Labs | Creative Commons Attribution | Imported vendor OBJ replaces the retired primitive body kit; existing vehicle camera hierarchy is preserved | `assets/vehicles/ignition_labs_car/`, `scenes/ArcadeVehicle.tscn`, `scripts/visual/vehicle_visuals.gd` |
 | Impact flash and particle polish | No external source; original runtime materials/lights | Urban Drive Prototype team | CC0 1.0 dedication | Added pooled orange impact flashes, emissive red particles, and retained existing pooled decals/fragments/audio | `scripts/effects/impact_effects.gd` |
 
 ## Verificación
