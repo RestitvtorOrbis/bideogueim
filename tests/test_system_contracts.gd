@@ -38,7 +38,7 @@ func _test_resources(results: Array[Dictionary]) -> void:
 		_expect(results, "vehicle suspension is configured", vehicle.suspension_rest_length > 0.0 and vehicle.suspension_stiffness > 0.0)
 	if civilian != null and hostile != null:
 		_expect(results, "civilian profile is non-hostile", not civilian.is_hostile())
-		_expect(results, "civilian walk speed is 3.0 m/s", is_equal_approx(civilian.walk_speed, 3.0))
+		_expect(results, "civilian walk speed is 4.5 m/s", is_equal_approx(civilian.walk_speed, 4.5))
 		_expect(results, "hostile walk speed is 3.4 m/s", is_equal_approx(hostile.walk_speed, 3.4))
 		_expect(results, "civilian profile has no equipped prop", civilian.equipped_prop_scene == null)
 		_expect(results, "hostile profile is hostile", hostile.is_hostile())
