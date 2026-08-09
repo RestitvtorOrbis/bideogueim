@@ -313,6 +313,12 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 	civilian_target.call("activate", civilian_profile, Vector3(4.0, 1.2, 4.0), "contract-civilian-target", &"", target)
 	var civilian_target_health := civilian_target.get_node("HealthComponent") as HealthComponent
 	hostile.set("_civilian_target_cooldown", 0.0)
+	var direction_override_projectile := hostile.call("fire_hostile_projectile", Vector3(3.0, 0.0, 4.0), 0.0) as Node
+	var expected_direction_override := Vector3(3.0, 0.0, 4.0).normalized()
+	var fired_direction_override := direction_override_projectile.get("fired_direction") as Vector3 if direction_override_projectile != null else Vector3.ZERO
+	_expect(results, "non-zero direction override takes precedence over target aim", direction_override_projectile != null and is_equal_approx(fired_direction_override.length(), 1.0) and fired_direction_override.dot(expected_direction_override) > 0.999)
+	if direction_override_projectile != null:
+		direction_override_projectile.queue_free()
 	var rejected_projectile := hostile.call("fire_hostile_projectile", Vector3.ZERO, 0.0, null, 0.99) as Node
 	_expect(results, "probability gate preserves ordinary hostile shots", rejected_projectile != null and is_equal_approx(float(rejected_projectile.get("damage")), 3.0))
 	if rejected_projectile != null:
@@ -336,6 +342,18 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 	if deliberate_projectile != null:
 		deliberate_projectile.call("_resolve_impact", {"collider": civilian_target})
 	_expect(results, "deliberate civilian projectile kills a full-health civilian", civilian_target_health != null and is_zero_approx(civilian_target_health.current_health) and bool(civilian_target.call("was_killed")))
+	var disabled_scan_timer_before := 0.0
+	civilian_target.set("_disabled_time", 0.0)
+	civilian_target.set("_hostile_awareness_time_left", disabled_scan_timer_before)
+	_expect(results, "killed civilian remains disabled beside an active hostile", bool(civilian_target.call("is_disabled")) and bool(civilian_target.call("was_killed")) and not bool(civilian_target.call("is_hostile_fleeing")))
+	_expect(results, "disabled dead civilian rejects hostile awareness", not bool(civilian_target.call("refresh_hostile_awareness")) and not bool(civilian_target.call("_scan_hostile_awareness")))
+	civilian_target.call("_update_hostile_awareness", 0.1)
+	civilian_target.call("tick", 0.75, true)
+	civilian_target.call("tick", 0.75, true)
+	_expect(results, "disabled timer advances and reaches recycle threshold", bool(civilian_target.call("is_disabled")) and is_equal_approx(float(civilian_target.get("_disabled_time")), 1.5) and bool(civilian_target.call("is_disabled_for_recycle")))
+	_expect(results, "disabled awareness update leaves its timer untouched", is_equal_approx(float(civilian_target.get("_hostile_awareness_time_left")), disabled_scan_timer_before))
+	civilian_target.call("deactivate")
+	_expect(results, "inactive civilian rejects hostile awareness", bool(civilian_target.call("is_inactive")) and not bool(civilian_target.call("refresh_hostile_awareness")) and not bool(civilian_target.call("_scan_hostile_awareness")))
 
 	var flee_hostile: Node = preload("res://scenes/Npc.tscn").instantiate()
 	var fleeing_civilian: Node = preload("res://scenes/Npc.tscn").instantiate()
