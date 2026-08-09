@@ -1,16 +1,21 @@
 extends CharacterBody3D
 
-enum State { INACTIVE, WANDER, ENGAGE, PANIC, FLEE, DISABLED, HOSTILE_FLEE }
+enum State { INACTIVE, WANDER, ENGAGE, PANIC, FLEE, DISABLED, HOSTILE_FLEE, VEHICLE_FLEE }
 
 const WEAPON_RECOIL_DURATION: float = 0.12
 const WEAPON_RECOIL_DISTANCE: float = 0.11
 const ACTIVE_NPC_GROUP: StringName = &"active_npc"
 const ACTIVE_CIVILIAN_GROUP: StringName = &"active_civilian"
 const ACTIVE_HOSTILE_GROUP: StringName = &"active_hostile"
+const VEHICLE_GROUP: StringName = &"vehicle"
 const HOSTILE_FLEE_RADIUS: float = 15.0
 const HOSTILE_FLEE_RELEASE_RADIUS: float = 20.0
 const HOSTILE_FLEE_SPEED_MULTIPLIER: float = 1.8
 const HOSTILE_AWARENESS_INTERVAL: float = 0.30
+const VEHICLE_FLEE_RADIUS: float = 18.0
+const VEHICLE_FLEE_RELEASE_RADIUS: float = 24.0
+const VEHICLE_FLEE_SPEED_MULTIPLIER: float = 2.0
+const VEHICLE_AWARENESS_INTERVAL: float = 0.30
 const FAR_MOVEMENT_SPEED_MULTIPLIER: float = 0.80
 const HUMAN_CHARACTER_CATALOG := preload("res://resources/human_character_catalog.tres")
 const CIVILIAN_VISUAL_HEIGHTS: Array[float] = [1.68, 1.74, 1.80, 1.86]
@@ -53,6 +58,8 @@ var _disabled_time: float = 0.0
 var _civilian_target_cooldown: float = 0.0
 var _hostile_awareness_time_left: float = 0.0
 var _hostile_flee_target: Node3D
+var _vehicle_awareness_time_left: float = 0.0
+var _vehicle_flee_target: Node3D
 var _run_grace_active: bool = false
 var _safe_radius: float = 0.0
 var _rng := RandomNumberGenerator.new()
@@ -103,6 +110,8 @@ func activate(
 	_panic_time_left = 0.0
 	_civilian_target_cooldown = 0.0
 	_hostile_flee_target = null
+	_vehicle_awareness_time_left = _get_vehicle_awareness_phase(new_lifecycle_id)
+	_vehicle_flee_target = null
 	_hostile_awareness_time_left = _get_hostile_awareness_phase(new_lifecycle_id)
 	_died = false
 	global_position = _resolve_grounded_spawn_position(spawn_position)
@@ -155,6 +164,8 @@ func deactivate() -> void:
 	_civilian_target_cooldown = 0.0
 	_hostile_awareness_time_left = 0.0
 	_hostile_flee_target = null
+	_vehicle_awareness_time_left = 0.0
+	_vehicle_flee_target = null
 	_disabled_time = 0.0
 	_run_grace_active = false
 	_safe_radius = 0.0
@@ -180,7 +191,9 @@ func tick(delta: float, full_ai: bool) -> void:
 		human_visual.advance_visual_animation(delta)
 	_civilian_target_cooldown = maxf(0.0, _civilian_target_cooldown - maxf(0.0, delta))
 	if profile != null and not profile.is_hostile() and state != State.INACTIVE and state != State.DISABLED and state != State.PANIC and state != State.FLEE and not _died:
-		_update_hostile_awareness(delta)
+		_update_vehicle_awareness(delta)
+		if state != State.VEHICLE_FLEE:
+			_update_hostile_awareness(delta)
 	if state == State.DISABLED:
 		_disabled_time += delta
 		return
@@ -189,6 +202,9 @@ func tick(delta: float, full_ai: bool) -> void:
 		return
 	if state == State.HOSTILE_FLEE:
 		_tick_hostile_flee(delta)
+		return
+	if state == State.VEHICLE_FLEE:
+		_tick_vehicle_flee(delta)
 		return
 	if _is_hostile_grace_active():
 		_tick_grace(delta)
@@ -397,6 +413,29 @@ func _tick_hostile_flee(_delta: float) -> void:
 	_update_visual_orientation(_delta)
 	_enforce_safe_radius()
 
+func _tick_vehicle_flee(_delta: float) -> void:
+	_update_weapon_presentation(_delta, null)
+	if not _can_flee_vehicles():
+		state = State.WANDER
+		_vehicle_flee_target = null
+		_select_wander_target()
+		return
+	var vehicle := _vehicle_flee_target
+	if not _is_valid_vehicle_candidate(vehicle):
+		state = State.WANDER
+		_vehicle_flee_target = null
+		_select_wander_target()
+		return
+	var away := _horizontal_direction_from(vehicle, self)
+	if away.length_squared() < 0.0001:
+		away = Vector3.FORWARD
+	var flee_speed := profile.walk_speed * VEHICLE_FLEE_SPEED_MULTIPLIER
+	velocity.x = away.x * flee_speed
+	velocity.z = away.z * flee_speed
+	move_and_slide()
+	_update_visual_orientation(_delta)
+	_enforce_safe_radius()
+
 func refresh_hostile_awareness() -> bool:
 	if not active or profile == null or profile.is_hostile() or state == State.INACTIVE or state == State.DISABLED or state == State.PANIC or state == State.FLEE or _died:
 		return false
@@ -414,6 +453,54 @@ func _update_hostile_awareness(delta: float) -> void:
 		return
 	_hostile_awareness_time_left = HOSTILE_AWARENESS_INTERVAL
 	_scan_hostile_awareness()
+
+func _update_vehicle_awareness(delta: float) -> void:
+	if not _can_flee_vehicles():
+		return
+	_vehicle_awareness_time_left -= maxf(0.0, delta)
+	if _vehicle_awareness_time_left > 0.0:
+		return
+	_vehicle_awareness_time_left = VEHICLE_AWARENESS_INTERVAL
+	_scan_vehicle_awareness()
+
+func _scan_vehicle_awareness() -> bool:
+	if not _can_flee_vehicles():
+		return false
+	var search_radius := VEHICLE_FLEE_RELEASE_RADIUS if state == State.VEHICLE_FLEE else VEHICLE_FLEE_RADIUS
+	var nearest_vehicle := _find_nearest_valid_vehicle(search_radius)
+	if nearest_vehicle != null:
+		_vehicle_flee_target = nearest_vehicle
+		state = State.VEHICLE_FLEE
+		return true
+	if state == State.VEHICLE_FLEE:
+		_vehicle_flee_target = null
+		state = State.WANDER
+		_select_wander_target()
+	return false
+
+func _find_nearest_valid_vehicle(max_distance: float) -> Node3D:
+	var tree := get_tree()
+	if tree == null:
+		return null
+	var nearest: Node3D = null
+	var nearest_distance_squared := maxf(0.0, max_distance) * maxf(0.0, max_distance)
+	for candidate in tree.get_nodes_in_group(VEHICLE_GROUP):
+		var vehicle := candidate as Node3D
+		if not _is_valid_vehicle_candidate(vehicle):
+			continue
+		var offset := vehicle.global_position - global_position
+		offset.y = 0.0
+		var distance_squared := offset.length_squared()
+		if distance_squared <= nearest_distance_squared:
+			nearest_distance_squared = distance_squared
+			nearest = vehicle
+	return nearest
+
+func _is_valid_vehicle_candidate(candidate: Node3D) -> bool:
+	return candidate != null and is_instance_valid(candidate) and candidate.is_inside_tree() and not candidate.is_queued_for_deletion()
+
+func _can_flee_vehicles() -> bool:
+	return active and profile != null and not profile.is_hostile() and state != State.INACTIVE and state != State.DISABLED and state != State.PANIC and state != State.FLEE and not _died and health != null and health.current_health > 0.0
 
 func _scan_hostile_awareness() -> bool:
 	if not active or profile == null or profile.is_hostile() or state == State.INACTIVE or state == State.DISABLED or state == State.PANIC or state == State.FLEE or _died:
@@ -855,6 +942,10 @@ func _remove_role_groups() -> void:
 
 func _get_hostile_awareness_phase(seed_text: String) -> float:
 	var phase_bucket := absi(seed_text.hash()) % 30
+	return float(phase_bucket) / 100.0
+
+func _get_vehicle_awareness_phase(seed_text: String) -> float:
+	var phase_bucket := absi(("%s:vehicle" % seed_text).hash()) % 30
 	return float(phase_bucket) / 100.0
 
 func _get_hostile_group_service() -> Node:

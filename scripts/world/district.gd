@@ -13,7 +13,7 @@ extends Node3D
 const NEON_FIXTURE_COUNT := 8
 const NEON_BIN_COLUMNS := 4
 const NEON_BIN_ROWS := 2
-const NEON_LIGHT_RANGE := 28.0
+const NEON_LIGHT_RANGE := 280.0
 const NEON_LIGHT_ENERGY := 9.0
 const STREET_LAMP_LIGHT_COUNT := 24
 const STREET_LAMP_LIGHT_RANGE := 22.0
@@ -448,6 +448,7 @@ func _build_building_neons() -> void:
 		light.light_color = palette[palette_index]
 		light.light_energy = NEON_LIGHT_ENERGY
 		light.omni_range = NEON_LIGHT_RANGE
+		light.omni_attenuation = 1.0
 		light.shadow_enabled = false
 		light.set_meta("fixture_index", fixture_index)
 		light.set_meta("sign_position", sign_position)
