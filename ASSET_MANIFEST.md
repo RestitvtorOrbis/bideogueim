@@ -15,11 +15,11 @@ Only these four payload files are retained under `assets/vehicles/ignition_labs_
 | Retained file | Exact size | SHA-256 | Modification |
 |---|---:|---|---|
 | `Lamborghini_Aventador.obj` | 592,760 bytes | `4ED9485C5A5C8EF7E526FB38C1AC2ED012FE0926633F3401F609DDE5D305C375` | None; vendor OBJ bytes unchanged. |
-| `Lamborghini_Aventador.mtl` | 726 bytes | `94875AC6DA58920570DBA17B7F7117FEC1483BEFD349D08F5B5AA4528C2F3493` | Only texture map paths normalized for portable local import. |
+| `Lamborghini_Aventador.mtl` | 696 bytes | `4C29038BCAD28F2F639223F92FD13FA0C649D6B452C18DF34F82449FEACA3A85` | Texture map paths normalized for portable local import; contradictory `Tr` rows removed so `d 1.0` keeps the body opaque and `d 0.06` keeps glass transparent. |
 | `Lamborginhi Aventador_diffuse.jpeg` | 330,994 bytes | `B3BEF9675E07040AE0C84D99DB6367ED0040703F4F8A98D8F73394D7F230967D` | None; vendor JPEG bytes unchanged. |
 | `Lamborginhi Aventador_spec.jpeg` | 319,289 bytes | `FDD0EDC191142048047541352B9205AC9305A251A9A644BFDFFE9A947EC8101E` | None; vendor JPEG bytes unchanged. |
 
-The three vendor MTL references using absolute `E:\\car\\...` paths were replaced with the retained local basenames `Lamborginhi Aventador_diffuse.jpeg` and `Lamborginhi Aventador_spec.jpeg`. No geometry, material values, or JPEG pixels were changed.
+The three vendor MTL references using absolute `E:\\car\\...` paths were replaced with the retained local basenames `Lamborginhi Aventador_diffuse.jpeg` and `Lamborginhi Aventador_spec.jpeg`. BUG-03 removed the duplicate inverse `Tr` opacity rows because they contradicted the retained standard `d` values and made the body transparent in Godot. No geometry or JPEG pixels were changed.
 
 ## Política de procedencia
 

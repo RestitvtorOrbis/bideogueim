@@ -203,6 +203,20 @@ func _test_world_and_vehicle(results: Array[Dictionary]) -> void:
 	var imported_model := vehicle.get_node_or_null("IgnitionLabsCar") as MeshInstance3D
 	var imported_resource := load("res://assets/vehicles/ignition_labs_car/Lamborghini_Aventador.obj") as Mesh
 	_expect(results, "vehicle uses the Ignition Labs imported OBJ", imported_model != null and imported_resource != null and imported_model.mesh == imported_resource)
+	var body_material: StandardMaterial3D = null
+	var glass_material: StandardMaterial3D = null
+	if imported_resource != null:
+		for surface_index in imported_resource.get_surface_count():
+			var candidate := imported_resource.surface_get_material(surface_index) as StandardMaterial3D
+			if candidate == null:
+				continue
+			var identity := "%s %s" % [imported_resource.surface_get_name(surface_index), candidate.resource_name]
+			if identity.contains("Glass"):
+				glass_material = candidate
+			elif identity.contains("Body") and body_material == null:
+				body_material = candidate
+	_expect(results, "imported vehicle body material is opaque", body_material != null and body_material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED and body_material.albedo_color.a >= 0.99)
+	_expect(results, "imported vehicle glass remains transparent", glass_material != null and glass_material.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED and glass_material.albedo_color.a < 0.99)
 	_expect(results, "imported vehicle model keeps the accepted scale and offset", imported_model != null and imported_model.scale == Vector3(0.009, 0.009, 0.009) and imported_model.position == Vector3(0.176, 0.0, 0.243))
 	var primitive_visual_names := ["BodyMesh", "CabinMesh", "Hood", "Roof", "AccentStrip", "Headlights", "RearLights", "WheelVisualFrontLeft", "WheelVisualFrontRight", "WheelVisualRearLeft", "WheelVisualRearRight", "HubVisualFrontLeft", "HubVisualFrontRight", "HubVisualRearLeft", "HubVisualRearRight"]
 	var primitive_visuals_absent := true
