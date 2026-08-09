@@ -4,17 +4,17 @@
 
 [sub_resource type="Environment" id="Environment"]
 background_mode = 1
-background_color = Color(0.012, 0.022, 0.045, 1)
+background_color = Color(0, 0, 0, 1)
 ambient_light_source = 3
 ambient_light_color = Color(0.64, 0.61, 0.47, 1)
-ambient_light_energy = 0.18
+ambient_light_energy = 0.0
 reflected_light_source = 2
 tonemap_mode = 2
 glow_enabled = true
 glow_intensity = 0.85
 glow_bloom = 0.12
 fog_enabled = true
-fog_light_color = Color(0.34, 0.32, 0.25, 1)
+fog_light_color = Color(0, 0, 0, 1)
 fog_density = 0.0018
 fog_height = 12.0
 fog_height_density = 0.018
@@ -28,14 +28,14 @@ environment = SubResource("Environment")
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 rotation_degrees = Vector3(-52, -28, 0)
 light_color = Color(1, 0.94, 0.78, 1)
-light_energy = 0.28
+light_energy = 0.0
 shadow_enabled = true
 directional_shadow_max_distance = 420.0
 
 [node name="DirectionalLight3DFill" type="DirectionalLight3D" parent="."]
 rotation_degrees = Vector3(-38, 152, 0)
 light_color = Color(0.84, 0.88, 0.72, 1)
-light_energy = 0.08
+light_energy = 0.0
 shadow_enabled = false
 
 [node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]

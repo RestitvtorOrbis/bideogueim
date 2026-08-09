@@ -846,7 +846,7 @@ func _apply_profile_visuals() -> void:
 		body_mesh.visible = false
 	_visual_profile = profile
 	if warning_marker != null:
-		warning_marker.visible = hostile and profile.warning_marker_enabled
+		warning_marker.visible = profile.warning_marker_enabled
 	if warning_marker != null and warning_marker.visible:
 		warning_marker.modulate = profile.warning_marker_color
 	if armed_prop != null:
