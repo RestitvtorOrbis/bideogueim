@@ -50,6 +50,8 @@ func _run() -> void:
 	_expect("every generated lamp has one collision shape", lamp_field != null and lamp_field.get_lamp_count() > 0 and lamp_field.get_collision_shape_count() == lamp_field.get_lamp_count())
 	_expect("lamp render and collision indices are stable", lamp_field != null and lamp_posts != null and lamp_glows != null and lamp_posts.multimesh.instance_count == lamp_field.get_lamp_count() and lamp_glows.multimesh.instance_count == lamp_field.get_lamp_count() and lamp_field.get_lamp_index_for_shape(0) == 0)
 	_test_neon_contract(district_a, district_b)
+	_test_perimeter_contract(district_a, district_b)
+	_test_perimeter_physics(district_a)
 	_expect("scene tree stays compact", _count_nodes(district_a) < 180)
 
 	var vehicle_script := load("res://scripts/vehicle/arcade_vehicle.gd") as GDScript
@@ -220,6 +222,109 @@ func _test_neon_contract(district_a: Node, district_b: Node) -> void:
 			outside_buildings = false
 	_expect("neon signs and lights stay outside building volumes", outside_buildings)
 	_expect("neon node root stays compact", neon_a != null and _count_nodes(neon_a) <= 12)
+
+func _test_perimeter_contract(district_a: Node, district_b: Node) -> void:
+	var modules_a: Array[Dictionary] = district_a.get_perimeter_modules()
+	var modules_b: Array[Dictionary] = district_b.get_perimeter_modules()
+	var perimeter := district_a.get_node_or_null("Perimeter") as Node3D
+	var boundary := district_a.get_node_or_null("Perimeter/Boundary") as StaticBody3D
+	var half_extent: float = district_a.get_city_size() * 0.5
+	var city_size: float = district_a.get_city_size()
+	_expect("perimeter modules are deterministic for equal seeds", modules_a == modules_b and modules_a.size() > 0)
+	_expect("perimeter has all four sides", _perimeter_has_all_sides(modules_a))
+	var style_set: Dictionary = {}
+	var height_band_set: Dictionary = {}
+	var side_seen := [false, false, false, false]
+	var side_ends := [0.0, 0.0, 0.0, 0.0]
+	var intervals_cover := true
+	var dimensions_valid := true
+	var inward_placement_valid := true
+	for module in modules_a:
+		var side := int(module["side"])
+		var interval_start := float(module["interval_start"])
+		var interval_end := float(module["interval_end"])
+		var width := float(module["width"])
+		var depth := float(module["depth"])
+		var height := float(module["height"])
+		style_set[int(module["style"])] = true
+		height_band_set[int(module["height_band"])] = true
+		dimensions_valid = dimensions_valid and width >= 14.0 and width <= 22.0 and depth >= 10.0 and depth <= 16.0 and height >= 24.0 and height <= 48.0
+		if side_seen[side]:
+			intervals_cover = intervals_cover and interval_start <= side_ends[side] + 0.001
+		side_seen[side] = true
+		side_ends[side] = interval_end
+		var position: Vector3 = module["position"]
+		if side == 0:
+			inward_placement_valid = inward_placement_valid and is_equal_approx(position.z - depth * 0.5, half_extent)
+		elif side == 1:
+			inward_placement_valid = inward_placement_valid and is_equal_approx(position.x - depth * 0.5, half_extent)
+		elif side == 2:
+			inward_placement_valid = inward_placement_valid and is_equal_approx(position.z + depth * 0.5, -half_extent)
+		else:
+			inward_placement_valid = inward_placement_valid and is_equal_approx(position.x + depth * 0.5, -half_extent)
+	for side in range(4):
+		var side_modules: Array = []
+		for module in modules_a:
+			if int(module["side"]) == side:
+				side_modules.append(module)
+		if side_modules.is_empty():
+			intervals_cover = false
+			continue
+		intervals_cover = intervals_cover and float(side_modules[0]["interval_start"]) <= -half_extent - 8.0 and float(side_modules[-1]["interval_end"]) >= half_extent + 8.0
+	_expect("perimeter intervals overlap with no gaps", intervals_cover)
+	_expect("perimeter uses at least three facade styles", style_set.size() >= 3)
+	_expect("perimeter uses four height bands", height_band_set.size() >= 4)
+	_expect("perimeter module dimensions stay in contract ranges", dimensions_valid)
+	_expect("perimeter inner facades align to playable bounds", inward_placement_valid)
+	_expect("perimeter exposes deterministic generation metadata", perimeter != null and district_a.get_perimeter_module_count() == modules_a.size() and district_a.get_perimeter_style_count() == style_set.size() and district_a.get_perimeter_height_band_count() == height_band_set.size())
+	var batched_visuals: bool = perimeter != null and perimeter.get_node_or_null("Roofs") is MultiMeshInstance3D and perimeter.get_node_or_null("Windows") is MultiMeshInstance3D
+	for style in range(4):
+		var style_instance := perimeter.get_node_or_null("Style%d" % style) as MultiMeshInstance3D if perimeter != null else null
+		batched_visuals = batched_visuals and style_instance != null and style_instance.multimesh != null and style_instance.multimesh.instance_count > 0
+	_expect("perimeter bodies roofs and windows use batched MultiMeshes", batched_visuals and perimeter != null and perimeter.get_child_count() == 7)
+	var boundary_shapes_valid: bool = boundary != null and boundary.get_child_count() == 4 and district_a.get_boundary_shape_count() == 4
+	var expected_wall_length: float = city_size + 16.0
+	if boundary != null:
+		for child in boundary.get_children():
+			var collision := child as CollisionShape3D
+			var shape := collision.shape as BoxShape3D if collision != null else null
+			boundary_shapes_valid = boundary_shapes_valid and collision != null and shape != null and is_equal_approx(shape.size.y, 25.0)
+			if collision != null and shape != null:
+				var north_or_south := absf(shape.size.x - expected_wall_length) < 0.001
+				var east_or_west := absf(shape.size.z - expected_wall_length) < 0.001
+				boundary_shapes_valid = boundary_shapes_valid and ((north_or_south and is_equal_approx(absf(collision.position.z), half_extent + 4.0)) or (east_or_west and is_equal_approx(absf(collision.position.x), half_extent + 4.0)))
+	_expect("boundary has exactly four eight-metre walls", boundary_shapes_valid)
+	_expect("boundary walls overlap corners by eight metres", boundary != null and is_equal_approx(float(boundary.get_meta("wall_length", 0.0)), expected_wall_length) and is_equal_approx(float(boundary.get_meta("wall_thickness", 0.0)), 8.0))
+	_expect("boundary wall planes align exactly to city bounds", boundary != null and is_equal_approx(float(boundary.get_meta("wall_bottom", 0.0)), -1.0) and is_equal_approx(float(boundary.get_meta("wall_top", 0.0)), 24.0))
+
+func _perimeter_has_all_sides(modules: Array[Dictionary]) -> bool:
+	var sides: Dictionary = {}
+	for module in modules:
+		sides[int(module["side"])] = true
+	return sides.size() == 4
+
+func _test_perimeter_physics(district: Node) -> void:
+	var boundary := district.get_node_or_null("Perimeter/Boundary") as StaticBody3D
+	if boundary == null:
+		_expect("vehicle-shaped probes meet every perimeter wall", false)
+		return
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(2.0, 1.6, 4.0)
+	var half_extent: float = district.get_city_size() * 0.5
+	var probes := [
+		Vector3(0.0, 1.0, half_extent + 1.0),
+		Vector3(half_extent + 1.0, 1.0, 0.0),
+		Vector3(0.0, 1.0, -half_extent - 1.0),
+		Vector3(-half_extent - 1.0, 1.0, 0.0),
+	]
+	var blocked := true
+	for probe in probes:
+		var query := PhysicsShapeQueryParameters3D.new()
+		query.shape = shape
+		query.transform = Transform3D(Basis.IDENTITY, probe)
+		query.collision_mask = 1
+		blocked = blocked and not district.get_world_3d().direct_space_state.intersect_shape(query, 8).is_empty()
+	_expect("vehicle-shaped probes meet every perimeter wall", blocked)
 
 func _arrays_match(left: Array, right: Array) -> bool:
 	if left.size() != right.size():

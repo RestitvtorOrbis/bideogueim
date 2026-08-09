@@ -41,6 +41,7 @@ func _ensure_city_built() -> void:
 	_build_roads()
 	_build_sidewalks()
 	_build_buildings()
+	_build_perimeter()
 	_build_parks_and_props()
 	_build_navigation()
 	_build_spawns()
@@ -78,6 +79,31 @@ func get_city_bounds() -> AABB:
 func get_building_count() -> int:
 	_ensure_city_built()
 	return (_layout.get("buildings", []) as Array).size()
+
+func get_perimeter_modules() -> Array[Dictionary]:
+	_ensure_city_built()
+	var modules: Array[Dictionary] = _layout.get("perimeter_modules", [])
+	return modules
+
+func get_perimeter_module_count() -> int:
+	_ensure_city_built()
+	var perimeter := get_node_or_null("Perimeter")
+	return int(perimeter.get_meta("module_count", 0)) if perimeter != null else 0
+
+func get_perimeter_style_count() -> int:
+	_ensure_city_built()
+	var perimeter := get_node_or_null("Perimeter")
+	return int(perimeter.get_meta("style_count", 0)) if perimeter != null else 0
+
+func get_perimeter_height_band_count() -> int:
+	_ensure_city_built()
+	var perimeter := get_node_or_null("Perimeter")
+	return int(perimeter.get_meta("height_band_count", 0)) if perimeter != null else 0
+
+func get_boundary_shape_count() -> int:
+	_ensure_city_built()
+	var boundary := get_node_or_null("Perimeter/Boundary")
+	return int(boundary.get_meta("shape_count", 0)) if boundary != null else 0
 
 func get_neon_fixture_count() -> int:
 	_ensure_city_built()
@@ -284,6 +310,100 @@ func _build_buildings() -> void:
 	collision.shape = shape
 	collision_body.add_child(collision)
 	_build_building_neons()
+
+func _build_perimeter() -> void:
+	var modules: Array[Dictionary] = _layout.get("perimeter_modules", [])
+	var perimeter_root := Node3D.new()
+	perimeter_root.name = "Perimeter"
+	add_child(perimeter_root)
+	var style_transforms: Array = [[], [], [], []]
+	var roof_transforms: Array = []
+	var window_transforms: Array = []
+	var styles_seen: Dictionary = {}
+	var height_bands_seen: Dictionary = {}
+
+	for module in modules:
+		var position: Vector3 = module["position"]
+		var width := float(module["width"])
+		var depth := float(module["depth"])
+		var height := float(module["height"])
+		var rotation := float(module["rotation"])
+		var style := clampi(int(module["style"]), 0, 3)
+		var yaw_basis := Basis(Vector3.UP, rotation)
+		style_transforms[style].append(Transform3D(yaw_basis.scaled(Vector3(width, height, depth)), position))
+		roof_transforms.append(Transform3D(
+			yaw_basis.scaled(Vector3(width * 0.92, 0.45, depth * 0.92)),
+			Vector3(position.x, height + 0.225, position.z)
+		))
+		_append_perimeter_windows(module, window_transforms)
+		styles_seen[style] = true
+		height_bands_seen[int(module["height_band"])] = true
+
+	for style in range(4):
+		_add_multimesh(
+			perimeter_root,
+			"Style%d" % style,
+			CityMeshes.box_mesh(Vector3.ONE, _materials["building_%d" % style]),
+			style_transforms[style]
+		)
+	_add_multimesh(perimeter_root, "Roofs", CityMeshes.box_mesh(Vector3.ONE, _materials["building_roof"]), roof_transforms)
+	_add_multimesh(perimeter_root, "Windows", CityMeshes.box_mesh(Vector3.ONE, _materials["glass"]), window_transforms)
+
+	var boundary := StaticBody3D.new()
+	boundary.name = "Boundary"
+	boundary.collision_layer = 1
+	boundary.collision_mask = 31
+	perimeter_root.add_child(boundary)
+	var extent := float(_layout["half_extent"])
+	var city_size := float(_layout["city_size"])
+	var wall_thickness := 8.0
+	var wall_bottom := -1.0
+	var wall_top := 24.0
+	var wall_height := wall_top - wall_bottom
+	var wall_center_y := (wall_top + wall_bottom) * 0.5
+	var wall_length := city_size + wall_thickness * 2.0
+	var wall_specs := [
+		{"name": "North", "size": Vector3(wall_length, wall_height, wall_thickness), "position": Vector3(0.0, wall_center_y, extent + wall_thickness * 0.5)},
+		{"name": "East", "size": Vector3(wall_thickness, wall_height, wall_length), "position": Vector3(extent + wall_thickness * 0.5, wall_center_y, 0.0)},
+		{"name": "South", "size": Vector3(wall_length, wall_height, wall_thickness), "position": Vector3(0.0, wall_center_y, -extent - wall_thickness * 0.5)},
+		{"name": "West", "size": Vector3(wall_thickness, wall_height, wall_length), "position": Vector3(-extent - wall_thickness * 0.5, wall_center_y, 0.0)},
+	]
+	for spec in wall_specs:
+		var collision := CollisionShape3D.new()
+		collision.name = spec["name"]
+		var shape := BoxShape3D.new()
+		shape.size = spec["size"]
+		collision.shape = shape
+		collision.position = spec["position"]
+		boundary.add_child(collision)
+	boundary.set_meta("shape_count", wall_specs.size())
+	boundary.set_meta("wall_thickness", wall_thickness)
+	boundary.set_meta("wall_bottom", wall_bottom)
+	boundary.set_meta("wall_top", wall_top)
+	boundary.set_meta("wall_length", wall_length)
+
+	perimeter_root.set_meta("module_count", modules.size())
+	perimeter_root.set_meta("style_count", styles_seen.size())
+	perimeter_root.set_meta("height_band_count", height_bands_seen.size())
+	perimeter_root.set_meta("modules", modules)
+
+func _append_perimeter_windows(module: Dictionary, output: Array) -> void:
+	var position: Vector3 = module["position"]
+	var width := float(module["width"])
+	var depth := float(module["depth"])
+	var height := float(module["height"])
+	var rotation := float(module["rotation"])
+	var local_normal: Vector3 = module["inner_local_normal"]
+	var yaw_basis := Basis(Vector3.UP, rotation)
+	var floors := clampi(int(height / 3.25) - 1, 1, 8)
+	var columns := clampi(int(width / 3.1), 2, 8)
+	for floor in range(floors):
+		var local_y := 2.4 + floor * 3.25
+		for column in range(columns):
+			var along := lerpf(-width * 0.5 + 1.5, width * 0.5 - 1.5, float(column) / float(maxi(1, columns - 1)))
+			var local_position := Vector3(along, local_y, local_normal.z * (depth * 0.5 + 0.045))
+			var world_position := Vector3(position.x, 0.0, position.z) + yaw_basis * local_position
+			output.append(Transform3D(yaw_basis.scaled(Vector3(1.1, 0.9, 0.08)), world_position))
 
 func _build_building_neons() -> void:
 	var neon_root := Node3D.new()

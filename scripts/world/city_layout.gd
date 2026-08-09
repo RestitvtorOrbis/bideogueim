@@ -5,6 +5,14 @@ extends RefCounted
 ## Keeping layout generation separate from scene construction makes it cheap to
 ## validate and guarantees that the same seed produces the same city.
 
+const PERIMETER_CORNER_OVERLAP := 8.0
+const PERIMETER_INTERVAL_OVERLAP := 0.25
+const PERIMETER_MIN_WIDTH := 14.0
+const PERIMETER_MAX_WIDTH := 22.0
+const PERIMETER_MIN_DEPTH := 10.0
+const PERIMETER_MAX_DEPTH := 16.0
+const PERIMETER_HEIGHT_BANDS := [26.0, 33.0, 40.0, 47.0]
+
 static func is_point_inside_building_footprint(
 		world_position: Vector3,
 		building: Dictionary,
@@ -114,6 +122,10 @@ static func generate(
 	# spawn coverage changes.
 	var civilian_spawns := _make_spawns(city_seed, road_centers, half_extent, buildings, civilian_count, 0)
 	var hostile_spawns := _make_spawns(city_seed, road_centers, half_extent, buildings, hostile_count, 1)
+	# Perimeter generation has its own seed-derived stream. It is intentionally
+	# generated after all interior and marker data so adding perimeter detail can
+	# never consume values from those streams or change their signature.
+	var perimeter_modules := make_perimeter(city_seed, half_extent)
 
 	var signature_parts: Array[String] = [
 		str(city_seed),
@@ -139,8 +151,81 @@ static func generate(
 		"vehicle_spawn": vehicle_spawn,
 		"civilian_spawns": civilian_spawns,
 		"hostile_spawns": hostile_spawns,
+		"perimeter_modules": perimeter_modules,
 		"signature": ":".join(signature_parts),
 	}
+
+static func make_perimeter(city_seed: int, half_extent: float) -> Array[Dictionary]:
+	var perimeter_rng := RandomNumberGenerator.new()
+	perimeter_rng.seed = _perimeter_seed(city_seed)
+	var safe_half_extent := maxf(1.0, half_extent)
+	var coverage_start := -safe_half_extent - PERIMETER_CORNER_OVERLAP
+	var coverage_end := safe_half_extent + PERIMETER_CORNER_OVERLAP
+	var side_names := ["north", "east", "south", "west"]
+	var height_bands := [26.0, 33.0, 40.0, 47.0]
+	var modules: Array[Dictionary] = []
+
+	for side in range(4):
+		var cursor := coverage_start
+		var module_index := 0
+		while cursor < coverage_end:
+			var width := perimeter_rng.randf_range(PERIMETER_MIN_WIDTH, PERIMETER_MAX_WIDTH)
+			var remaining := coverage_end - cursor
+			if remaining <= width:
+				# Keep the final module within the requested range while extending
+				# its interval past the target by the standard overlap amount.
+				width = clampf(remaining + PERIMETER_INTERVAL_OVERLAP, PERIMETER_MIN_WIDTH, PERIMETER_MAX_WIDTH)
+			var interval_start := cursor
+			var interval_end := cursor + width
+			var depth := perimeter_rng.randf_range(PERIMETER_MIN_DEPTH, PERIMETER_MAX_DEPTH)
+			var height_band := posmod(side + module_index, height_bands.size())
+			var style := posmod(side * 2 + module_index, 4)
+			var height: float = height_bands[height_band]
+			var rotation := 0.0
+			var position := Vector3.ZERO
+			var inward_normal := Vector3.ZERO
+			var inner_local_normal := Vector3.ZERO
+			match side:
+				0: # north, z = +half_extent
+					position = Vector3((interval_start + interval_end) * 0.5, height * 0.5, safe_half_extent + depth * 0.5)
+					inward_normal = Vector3(0.0, 0.0, -1.0)
+					inner_local_normal = Vector3(0.0, 0.0, -1.0)
+				1: # east, x = +half_extent
+					rotation = PI * 0.5
+					position = Vector3(safe_half_extent + depth * 0.5, height * 0.5, (interval_start + interval_end) * 0.5)
+					inward_normal = Vector3(-1.0, 0.0, 0.0)
+					inner_local_normal = Vector3(0.0, 0.0, -1.0)
+				2: # south, z = -half_extent
+					position = Vector3((interval_start + interval_end) * 0.5, height * 0.5, -safe_half_extent - depth * 0.5)
+					inward_normal = Vector3(0.0, 0.0, 1.0)
+					inner_local_normal = Vector3(0.0, 0.0, 1.0)
+				3: # west, x = -half_extent
+					rotation = PI * 0.5
+					position = Vector3(-safe_half_extent - depth * 0.5, height * 0.5, (interval_start + interval_end) * 0.5)
+					inward_normal = Vector3(1.0, 0.0, 0.0)
+					inner_local_normal = Vector3(0.0, 0.0, 1.0)
+			modules.append({
+				"side": side,
+				"side_name": side_names[side],
+				"position": position,
+				"width": width,
+				"depth": depth,
+				"height": height,
+				"height_band": height_band,
+				"style": style,
+				"rotation": rotation,
+				"interval_start": interval_start,
+				"interval_end": interval_end,
+				"inner_plane": safe_half_extent if side == 0 or side == 1 else -safe_half_extent,
+				"inward_normal": inward_normal,
+				"inner_local_normal": inner_local_normal,
+			})
+			cursor += width - PERIMETER_INTERVAL_OVERLAP
+			module_index += 1
+	return modules
+
+static func _perimeter_seed(city_seed: int) -> int:
+	return city_seed * 1664525 + 1013904223
 
 static func _make_spawns(
 		city_seed: int,
