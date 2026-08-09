@@ -13,6 +13,7 @@ This repository is in beta.
 
 ## Windows PowerShell Build Invocation
 
+- After every completed feature implementation, always run the Windows export pipeline before final delivery so `exports/windows/UrbanDrivePrototype.exe` and its matching PCK are regenerated from that feature's accepted commit. This requirement applies even when the feature ticket's own validation excludes tests or export work; export/package delivery is the mandatory next workflow step.
 - On Windows hosts where the local execution policy blocks repository scripts, invoke the existing export pipeline with `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\export.ps1`.
 - This bypass must remain process-scoped. Do not change the machine or user PowerShell execution policy.
 - A direct `./tools/export.ps1` policy failure occurs before Docker starts and does not indicate a Godot export failure.
