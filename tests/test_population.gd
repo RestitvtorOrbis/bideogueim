@@ -37,6 +37,7 @@ func run() -> Array[Dictionary]:
 	_test_grace_boundaries_and_combat(results)
 	_test_safe_radius_behavior(results)
 	_test_civilian_roaming_anchors(results)
+	_test_visual_distance_tiers(results)
 	_test_recycling_and_pool_reuse(results)
 	return results
 
@@ -55,6 +56,7 @@ func _test_settings_contract(results: Array[Dictionary]) -> void:
 	_expect(results, "death replacement floor is 30 meters for every role", settings != null and is_equal_approx(settings.death_replacement_minimum_spawn_distance, 30.0))
 	_expect(results, "hostile safe radius is 30 meters", settings != null and is_equal_approx(settings.hostile_safe_radius, 30.0))
 	_expect(results, "hostile grace period is 8 seconds", settings != null and is_equal_approx(settings.hostile_grace_period, 8.0))
+	_expect(results, "visuals hide beyond 100 meters", settings != null and is_equal_approx(settings.visual_hide_distance, 100.0))
 
 func _test_bucket_selection(results: Array[Dictionary]) -> void:
 	var settings := _make_settings()
@@ -145,10 +147,11 @@ func _test_initial_population_and_budget(results: Array[Dictionary]) -> void:
 	_expect(results, "initial population contains both configured roles", _count_role(manager, "civilian") > 0 and _count_role(manager, "hostile") > 0)
 	var spawn_heights_are_grounded := true
 	for npc in (manager.get("_active_npcs") as Dictionary).keys():
-		if is_instance_valid(npc) and not is_equal_approx((npc as Node3D).global_position.y, 1.2):
+		var spawn_y := (npc as Node3D).global_position.y if is_instance_valid(npc) else -1.0
+		if spawn_y < 0.0 or spawn_y > 1.2 + 0.001:
 			spawn_heights_are_grounded = false
 			break
-	_expect(results, "initial population keeps the district marker height", spawn_heights_are_grounded)
+	_expect(results, "initial population stays between grounded clearance and marker height", spawn_heights_are_grounded)
 	var before_budget := int(manager.get("active_npc_count"))
 	manager.call("_physics_process", 0.016)
 	var after_budget := int(manager.get("active_npc_count"))
@@ -406,6 +409,57 @@ func _test_recycling_and_pool_reuse(results: Array[Dictionary]) -> void:
 	manager.call("_physics_process", 0.016)
 	_expect(results, "recycled NPCs are reused within the next budget", int(manager.get("active_npc_count")) <= settings.spawn_budget_per_frame)
 	_expect(results, "recycling does not allocate a second population", int(manager.get("pool_allocations")) == allocations_before)
+	_cleanup_fixture(fixture)
+
+func _test_visual_distance_tiers(results: Array[Dictionary]) -> void:
+	var settings := _make_settings()
+	settings.initial_population_count = 0
+	settings.initial_visible_count = 0
+	settings.civilian_target_count = 0
+	settings.hostile_target_count = 0
+	settings.spawn_budget_per_frame = 0
+	var fixture := _create_fixture(settings)
+	var manager: Node = fixture["manager"]
+	var player: Node3D = fixture["player"]
+	var civilian_pool: NpcPool = manager.get("_civilian_pool")
+	var civilian_profile := load("res://resources/default_civilian_profile.tres") as NpcProfile
+	var npc := civilian_pool.checkout(civilian_profile, Vector3.ZERO, "visual-tier-civilian", &"", player)
+	var visual := npc.get_node("Visuals/HumanCharacterVisual") as HumanCharacterVisual
+	var active: Dictionary = manager.get("_active_npcs")
+	active[npc] = "civilian"
+
+	var apply_distance := func(distance: float) -> void:
+		npc.global_position = Vector3(distance, 0.0, 0.0)
+		manager.call("_physics_process", 0.016)
+
+	apply_distance.call(35.0)
+	_expect(results, "visual tier at exactly 35m is full and normal", npc.call("get_visual_tier") == 0 and visual.get_visibility_tier() == HumanCharacterVisual.VISIBILITY_TIER_FULL and visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_NORMAL)
+	apply_distance.call(35.001)
+	_expect(results, "visual tier just over 35m is reduced and throttled", npc.call("get_visual_tier") == 1 and visual.get_visibility_tier() == HumanCharacterVisual.VISIBILITY_TIER_REDUCED and visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_THROTTLED)
+	apply_distance.call(75.0)
+	var visibility_applies := visual.get_visibility_apply_count()
+	var animation_plays := visual.get_animation_play_count()
+	apply_distance.call(75.0)
+	_expect(results, "exactly 75m remains mid tier and repeated assignment is idempotent", npc.call("get_visual_tier") == 1 and visual.get_visibility_tier() == HumanCharacterVisual.VISIBILITY_TIER_REDUCED and visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_THROTTLED and visual.get_visibility_apply_count() == visibility_applies and visual.get_animation_play_count() == animation_plays)
+	apply_distance.call(75.001)
+	_expect(results, "visual tier just over 75m is reduced and frozen", npc.call("get_visual_tier") == 2 and visual.get_visibility_tier() == HumanCharacterVisual.VISIBILITY_TIER_REDUCED and visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_FROZEN and visual.get_animation_process_mode() == AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL)
+	apply_distance.call(100.0)
+	_expect(results, "exactly 100m remains reduced and frozen", npc.call("get_visual_tier") == 2 and visual.get_visibility_tier() == HumanCharacterVisual.VISIBILITY_TIER_REDUCED and visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_FROZEN)
+	apply_distance.call(100.001)
+	_expect(results, "visual tier just over 100m is hidden and frozen", npc.call("get_visual_tier") == 3 and visual.get_visibility_tier() == HumanCharacterVisual.VISIBILITY_TIER_HIDDEN and visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_FROZEN and not (visual.get_node("ModelPivot") as Node3D).visible)
+	apply_distance.call(100.0)
+	apply_distance.call(75.0)
+	_expect(results, "inward transition to 75m restores throttled reduced visuals", npc.call("get_visual_tier") == 1 and visual.get_visibility_tier() == HumanCharacterVisual.VISIBILITY_TIER_REDUCED and visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_THROTTLED)
+	apply_distance.call(35.0)
+	_expect(results, "inward transition to 35m restores full normal visuals", npc.call("get_visual_tier") == 0 and visual.get_visibility_tier() == HumanCharacterVisual.VISIBILITY_TIER_FULL and visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_NORMAL and (visual.get_node("ModelPivot") as Node3D).visible)
+
+	active.erase(npc)
+	civilian_pool.release(npc)
+	_expect(results, "pool release clears visual tier to frozen and hidden", npc.call("get_visual_tier") == -1 and visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_FROZEN and visual.get_visibility_tier() == HumanCharacterVisual.VISIBILITY_TIER_HIDDEN)
+	var reused := civilian_pool.checkout(civilian_profile, Vector3.ZERO, "visual-tier-reuse", &"", player)
+	var reused_visual := reused.get_node("Visuals/HumanCharacterVisual") as HumanCharacterVisual
+	_expect(results, "pool reuse resets visual tier to full and normal", reused == npc and reused.call("get_visual_tier") == 0 and reused_visual.get_visibility_tier() == HumanCharacterVisual.VISIBILITY_TIER_FULL and reused_visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_NORMAL and (reused_visual.get_node("ModelPivot") as Node3D).visible)
+	civilian_pool.release(reused)
 	_cleanup_fixture(fixture)
 
 func _live_projectile_count() -> int:

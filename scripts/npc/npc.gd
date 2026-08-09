@@ -19,6 +19,10 @@ const VISUAL_YAW_RESPONSE: float = 12.0
 const GROUNDING_RAY_START_OFFSET: float = 2.0
 const GROUNDING_RAY_END_Y: float = -2.0
 const GROUNDING_CLEARANCE: float = 0.02
+const VISUAL_TIER_FULL := 0
+const VISUAL_TIER_MID := 1
+const VISUAL_TIER_FAR := 2
+const VISUAL_TIER_HIDDEN := 3
 
 @export var civilian_profile: NpcProfile
 @export var hostile_profile: NpcProfile
@@ -58,6 +62,7 @@ var _weapon_pivot_rest_position := Vector3.ZERO
 var _weapon_recoil_time_left: float = 0.0
 var _died: bool = false
 var _visual_yaw: float = 0.0
+var _visual_tier := -1
 
 func _ready() -> void:
 	_rng.randomize()
@@ -115,6 +120,7 @@ func activate(
 	if human_visual != null:
 		human_visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_NORMAL)
 		human_visual.set_motion_speed(0.0)
+	_visual_tier = VISUAL_TIER_FULL
 	if profile.is_hostile():
 		var hostile_service := _get_hostile_group_service()
 		if group_id == &"":
@@ -153,6 +159,7 @@ func deactivate() -> void:
 	_run_grace_active = false
 	_safe_radius = 0.0
 	_died = false
+	_visual_tier = -1
 	visible = false
 	collision_layer = 0
 	collision_mask = 0
@@ -169,6 +176,8 @@ func tick(delta: float, full_ai: bool) -> void:
 	if not active:
 		return
 	_update_visual_animation_state()
+	if human_visual != null:
+		human_visual.advance_visual_animation(delta)
 	_civilian_target_cooldown = maxf(0.0, _civilian_target_cooldown - maxf(0.0, delta))
 	if profile != null and not profile.is_hostile() and state != State.INACTIVE and state != State.DISABLED and state != State.PANIC and state != State.FLEE and not _died:
 		_update_hostile_awareness(delta)
@@ -747,6 +756,42 @@ func _update_visual_animation_state() -> void:
 	if human_visual == null:
 		return
 	human_visual.set_motion_speed(Vector3(velocity.x, 0.0, velocity.z).length())
+
+
+func update_visual_tier(distance: float, full_distance: float, mid_distance: float, hide_distance: float) -> int:
+	if not active or human_visual == null:
+		return _visual_tier
+	var full_boundary := maxf(0.0, full_distance)
+	var mid_boundary := maxf(full_boundary, mid_distance)
+	var hide_boundary := maxf(mid_boundary, hide_distance)
+	var next_tier := VISUAL_TIER_FULL
+	if distance > hide_boundary:
+		next_tier = VISUAL_TIER_HIDDEN
+	elif distance > mid_boundary:
+		next_tier = VISUAL_TIER_FAR
+	elif distance > full_boundary:
+		next_tier = VISUAL_TIER_MID
+	if next_tier == _visual_tier:
+		return _visual_tier
+	_visual_tier = next_tier
+	match next_tier:
+		VISUAL_TIER_FULL:
+			human_visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_NORMAL)
+			human_visual.set_visibility_tier(HumanCharacterVisual.VISIBILITY_TIER_FULL)
+		VISUAL_TIER_MID:
+			human_visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_THROTTLED)
+			human_visual.set_visibility_tier(HumanCharacterVisual.VISIBILITY_TIER_REDUCED)
+		VISUAL_TIER_FAR:
+			human_visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_FROZEN)
+			human_visual.set_visibility_tier(HumanCharacterVisual.VISIBILITY_TIER_REDUCED)
+		VISUAL_TIER_HIDDEN:
+			human_visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_FROZEN)
+			human_visual.set_visibility_tier(HumanCharacterVisual.VISIBILITY_TIER_HIDDEN)
+	return _visual_tier
+
+
+func get_visual_tier() -> int:
+	return _visual_tier
 
 func _on_health_died() -> void:
 	if active and state != State.DISABLED:

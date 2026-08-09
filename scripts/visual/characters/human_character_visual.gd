@@ -11,6 +11,7 @@ const VISIBILITY_TIER_HIDDEN := 2
 const ANIMATION_TIER_NORMAL := 0
 const ANIMATION_TIER_THROTTLED := 1
 const ANIMATION_TIER_FROZEN := 2
+const THROTTLED_ANIMATION_INTERVAL := 0.10
 
 const ACCESSORY_RENDER_POLICY := &"deferred_shared_skeleton"
 const LOCOMOTION_SOURCE_PATH := "res://assets/characters/quaternius/animations/locomotion.glb"
@@ -95,6 +96,10 @@ var _animation_tier := ANIMATION_TIER_NORMAL
 var _animation_player: AnimationPlayer
 var _selected_animation_clip: StringName = &""
 var _selected_animation_library: StringName = &""
+var _manual_animation_elapsed := 0.0
+var _manual_animation_advance_count := 0
+var _animation_play_count := 0
+var _visibility_apply_count := 0
 
 
 func configure_body(path: String, height: float, source_positive_z := true) -> bool:
@@ -275,7 +280,10 @@ func get_palette_material(slot: StringName = &"body") -> StandardMaterial3D:
 
 
 func set_visibility_tier(value: Variant) -> int:
-	_visibility_tier = _normalize_visibility_tier(value)
+	var normalized := _normalize_visibility_tier(value)
+	if normalized == _visibility_tier:
+		return _visibility_tier
+	_visibility_tier = normalized
 	_apply_visibility_tier()
 	return _visibility_tier
 
@@ -290,6 +298,24 @@ func get_motion_speed() -> float:
 
 func get_animation_tier() -> int:
 	return _animation_tier
+
+
+func get_animation_process_mode() -> int:
+	if not is_instance_valid(_animation_player):
+		return AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_IDLE
+	return _animation_player.callback_mode_process
+
+
+func get_manual_animation_advance_count() -> int:
+	return _manual_animation_advance_count
+
+
+func get_animation_play_count() -> int:
+	return _animation_play_count
+
+
+func get_visibility_apply_count() -> int:
+	return _visibility_apply_count
 
 
 func get_locomotion_animation(clip_name: StringName) -> Animation:
@@ -395,15 +421,19 @@ func set_motion_speed(value: Variant) -> float:
 		if speed == speed and speed != INF and speed != -INF:
 			normalized = maxf(0.0, speed)
 	_motion_speed = normalized
-	if _animation_tier != ANIMATION_TIER_THROTTLED:
+	if _animation_tier == ANIMATION_TIER_NORMAL:
 		_update_locomotion_playback()
 	return _motion_speed
 
 
 func set_animation_tier(value: Variant) -> int:
-	_animation_tier = _normalize_animation_tier(value)
-	if _animation_tier != ANIMATION_TIER_THROTTLED:
-		_update_locomotion_playback()
+	var normalized := _normalize_animation_tier(value)
+	if normalized == _animation_tier:
+		return _animation_tier
+	_animation_tier = normalized
+	_manual_animation_elapsed = 0.0
+	_apply_animation_process_mode()
+	_update_locomotion_playback()
 	return _animation_tier
 
 
@@ -416,6 +446,20 @@ func set_animation_role(role: StringName) -> StringName:
 
 func update_locomotion() -> void:
 	_update_locomotion_playback()
+
+
+func advance_visual_animation(delta: float) -> bool:
+	if _animation_tier != ANIMATION_TIER_THROTTLED or not is_instance_valid(_animation_player):
+		return false
+	_manual_animation_elapsed += maxf(0.0, delta)
+	if _manual_animation_elapsed < THROTTLED_ANIMATION_INTERVAL:
+		return false
+	var advance_delta := _manual_animation_elapsed
+	_manual_animation_elapsed = 0.0
+	_update_locomotion_playback()
+	_animation_player.advance(advance_delta)
+	_manual_animation_advance_count += 1
+	return true
 
 
 func _setup_animation_playback() -> void:
@@ -434,7 +478,18 @@ func _setup_animation_playback() -> void:
 	if ual2_library != null:
 		player.add_animation_library(&"ual2", ual2_library)
 	_animation_player = player
+	_apply_animation_process_mode()
 	_update_locomotion_playback(true)
+
+
+func _apply_animation_process_mode() -> void:
+	if not is_instance_valid(_animation_player):
+		return
+	_animation_player.callback_mode_process = (
+		AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_IDLE
+		if _animation_tier == ANIMATION_TIER_NORMAL
+		else AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	)
 
 
 func _update_locomotion_playback(force_restart := false) -> void:
@@ -447,9 +502,10 @@ func _update_locomotion_playback(force_restart := false) -> void:
 	if _animation_tier == ANIMATION_TIER_FROZEN:
 		desired_clip = _idle_clip_for_role(_role)
 		desired_library = &"ual2" if _is_ual2_clip(desired_clip) else &""
-		_animation_player.stop()
-		_selected_animation_clip = desired_clip
-		_selected_animation_library = desired_library
+		if _selected_animation_clip != desired_clip or _selected_animation_library != desired_library or _animation_player.is_playing():
+			_animation_player.stop()
+			_selected_animation_clip = desired_clip
+			_selected_animation_library = desired_library
 		return
 	var playback_name := String(desired_clip)
 	if desired_library != &"":
@@ -468,6 +524,7 @@ func _update_locomotion_playback(force_restart := false) -> void:
 		return
 	if force_restart or not _animation_player.is_playing() or _selected_animation_clip != desired_clip or _selected_animation_library != desired_library:
 		_animation_player.play(playback_name)
+		_animation_play_count += 1
 	_selected_animation_clip = desired_clip
 	_selected_animation_library = desired_library
 
@@ -530,6 +587,10 @@ func _clear_body() -> void:
 	_animation_player = null
 	_selected_animation_clip = &""
 	_selected_animation_library = &""
+	_manual_animation_elapsed = 0.0
+	_manual_animation_advance_count = 0
+	_animation_play_count = 0
+	_visibility_apply_count = 0
 	if is_instance_valid(_body_instance):
 		_body_instance.free()
 	_body_instance = null
@@ -690,6 +751,7 @@ func _palette_slot_for_surface(mesh_instance: MeshInstance3D, source_material: S
 
 
 func _apply_visibility_tier() -> void:
+	_visibility_apply_count += 1
 	var model_pivot := _get_model_pivot()
 	if model_pivot != null:
 		model_pivot.visible = _visibility_tier != VISIBILITY_TIER_HIDDEN

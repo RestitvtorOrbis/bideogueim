@@ -1,12 +1,18 @@
 extends CanvasLayer
 
+const FPS_UPDATE_INTERVAL := 0.25
+
 @onready var score_label: Label = $MarginContainer/Panel/VBox/Score
 @onready var high_score_label: Label = $MarginContainer/Panel/VBox/HighScore
+@onready var fps_label: Label = $MarginContainer/Panel/VBox/FPS
 @onready var combo_label: Label = $MarginContainer/Panel/VBox/Combo
 @onready var player_health_label: Label = $MarginContainer/Panel/VBox/PlayerHealth
 @onready var vehicle_health_label: Label = $MarginContainer/Panel/VBox/VehicleHealth
 @onready var gore_label: Label = $MarginContainer/Panel/VBox/GorePreset
 @onready var popup_pool: Node = $ScorePopupPool
+
+var _fps_update_elapsed := 0.0
+var _fps_update_count := 0
 
 func _ready() -> void:
 	ScoreManager.score_changed.connect(_on_score_changed)
@@ -15,6 +21,23 @@ func _ready() -> void:
 	_on_score_changed(0, GameState.current_score)
 	_on_combo_changed(ScoreManager.combo_multiplier, ScoreManager.combo_streak)
 	_on_preset_changed(int(SettingsService.violence.preset), SettingsService.violence.label())
+	_update_fps_label()
+
+func _process(delta: float) -> void:
+	_fps_update_elapsed += maxf(0.0, delta)
+	if _fps_update_elapsed < FPS_UPDATE_INTERVAL:
+		return
+	_fps_update_elapsed = fmod(_fps_update_elapsed, FPS_UPDATE_INTERVAL)
+	_update_fps_label()
+
+static func format_fps(frames_per_second: float) -> String:
+	return "FPS: %d" % maxi(0, roundi(frames_per_second))
+
+func _update_fps_label() -> void:
+	if fps_label == null:
+		return
+	fps_label.text = format_fps(Engine.get_frames_per_second())
+	_fps_update_count += 1
 
 func bind_player(player: Node) -> void:
 	if player != null and player.has_node("HealthComponent"):

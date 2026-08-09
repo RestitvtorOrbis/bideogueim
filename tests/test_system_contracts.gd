@@ -303,7 +303,7 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 	civilian.call("tick", 0.1, true)
 	_expect(results, "civilian stays in wandering state", int(civilian.get("state")) == 1)
 	_expect(results, "civilian selects a wander target", (civilian.get("_wander_target") as Vector3) != Vector3.ZERO)
-	var civilian_wander_offset := (civilian.get("_wander_target") as Vector3) - target.global_position
+	var civilian_wander_offset := (civilian.get("_wander_target") as Vector3) - (civilian.get("_roaming_anchor") as Vector3)
 	civilian_wander_offset.y = 0.0
 	_expect(results, "ordinary wander radius is between 8 and 28 meters", civilian_wander_offset.length() >= 8.0 and civilian_wander_offset.length() <= 28.0)
 	_expect(results, "ordinary wander retarget time is between 2 and 5 seconds", float(civilian.get("_wander_time_left")) >= 2.0 and float(civilian.get("_wander_time_left")) <= 5.0)
@@ -478,7 +478,13 @@ func _test_effects_and_ui(results: Array[Dictionary]) -> void:
 	ScoreManager.score_changed.emit(50, 50)
 	var score_label := hud.get_node("MarginContainer/Panel/VBox/Score") as Label
 	_expect(results, "HUD reads score service signals", score_label != null and score_label.text == "Score: 50")
-	_expect(results, "HUD exposes health and preset labels", hud.get_node_or_null("MarginContainer/Panel/VBox/PlayerHealth") != null and hud.get_node_or_null("MarginContainer/Panel/VBox/VehicleHealth") != null and hud.get_node_or_null("MarginContainer/Panel/VBox/GorePreset") != null)
+	var fps_label := hud.get_node_or_null("MarginContainer/Panel/VBox/FPS") as Label
+	var fps_updates_before := int(hud.get("_fps_update_count"))
+	_expect(results, "HUD exposes health, preset, and integer FPS labels", hud.get_node_or_null("MarginContainer/Panel/VBox/PlayerHealth") != null and hud.get_node_or_null("MarginContainer/Panel/VBox/VehicleHealth") != null and hud.get_node_or_null("MarginContainer/Panel/VBox/GorePreset") != null and fps_label != null and fps_label.text.begins_with("FPS: ") and hud.call("format_fps", 59.6) == "FPS: 60")
+	hud.call("_process", 0.10)
+	var fps_updates_after_short_delta := int(hud.get("_fps_update_count"))
+	hud.call("_process", 0.15)
+	_expect(results, "HUD FPS refresh is bounded to the quarter-second cadence", fps_updates_after_short_delta == fps_updates_before and int(hud.get("_fps_update_count")) == fps_updates_before + 1)
 	hud.get_node("ScorePopupPool").call("show_delta", -25)
 	var popup_visible := false
 	for popup in hud.get_node("ScorePopupPool").get_children():

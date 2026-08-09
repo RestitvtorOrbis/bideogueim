@@ -26,5 +26,6 @@ hostile_grace_period = 8.0
 despawn_distance = 130.0
 full_ai_distance = 35.0
 mid_ai_distance = 75.0
+visual_hide_distance = 100.0
 mid_update_interval = 0.15
 far_update_interval = 0.5

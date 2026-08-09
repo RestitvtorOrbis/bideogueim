@@ -113,6 +113,14 @@ func _physics_process(delta: float) -> void:
 		if npc.has_method("configure_run_safety"):
 			npc.call("configure_run_safety", _is_hostile_grace_active(), crowd_settings.hostile_safe_radius)
 		var distance: float = npc_node.global_position.distance_to(player_node.global_position)
+		if npc.has_method("update_visual_tier"):
+			npc.call(
+				"update_visual_tier",
+				distance,
+				crowd_settings.full_ai_distance,
+				crowd_settings.mid_ai_distance,
+				crowd_settings.visual_hide_distance
+			)
 		if distance <= crowd_settings.full_ai_distance:
 			npc.call("tick", delta, true)
 		elif distance <= crowd_settings.mid_ai_distance:

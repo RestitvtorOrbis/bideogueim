@@ -25,5 +25,6 @@ extends Resource
 @export_range(10.0, 1000.0, 1.0) var despawn_distance: float = 130.0
 @export_range(5.0, 250.0, 1.0) var full_ai_distance: float = 35.0
 @export_range(5.0, 500.0, 1.0) var mid_ai_distance: float = 75.0
+@export_range(75.0, 500.0, 1.0) var visual_hide_distance: float = 100.0
 @export_range(0.02, 1.0, 0.01) var mid_update_interval: float = 0.15
 @export_range(0.05, 2.0, 0.01) var far_update_interval: float = 0.5
