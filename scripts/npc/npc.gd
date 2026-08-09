@@ -12,6 +12,10 @@ const HOSTILE_FLEE_RELEASE_RADIUS: float = 20.0
 const HOSTILE_FLEE_SPEED_MULTIPLIER: float = 1.8
 const HOSTILE_AWARENESS_INTERVAL: float = 0.30
 const FAR_MOVEMENT_SPEED_MULTIPLIER: float = 0.80
+const HUMAN_CHARACTER_CATALOG := preload("res://resources/human_character_catalog.tres")
+const CIVILIAN_VISUAL_HEIGHTS: Array[float] = [1.68, 1.74, 1.80, 1.86]
+const HOSTILE_VISUAL_HEIGHTS: Array[float] = [1.78, 1.86]
+const VISUAL_YAW_RESPONSE: float = 12.0
 
 @export var civilian_profile: NpcProfile
 @export var hostile_profile: NpcProfile
@@ -23,6 +27,7 @@ const FAR_MOVEMENT_SPEED_MULTIPLIER: float = 0.80
 @onready var warning_marker: Label3D = $RoleMarkerAnchor/WarningMarker
 @onready var armed_prop: Node3D = $RoleMarkerAnchor/HostileProp
 @onready var weapon_pivot: Node3D = $RoleMarkerAnchor/HostileProp/WeaponPivot
+@onready var human_visual: HumanCharacterVisual = $Visuals/HumanCharacterVisual
 
 var profile: NpcProfile
 var state: State = State.INACTIVE
@@ -48,6 +53,7 @@ var _visual_material: StandardMaterial3D
 var _weapon_pivot_rest_position := Vector3.ZERO
 var _weapon_recoil_time_left: float = 0.0
 var _died: bool = false
+var _visual_yaw: float = 0.0
 
 func _ready() -> void:
 	_rng.randomize()
@@ -92,6 +98,9 @@ func activate(
 	_died = false
 	global_position = spawn_position
 	velocity = Vector3.ZERO
+	_visual_yaw = 0.0
+	if human_visual != null:
+		human_visual.rotation = Vector3.ZERO
 	visible = true
 	collision_layer = 8
 	collision_mask = 5
@@ -123,6 +132,7 @@ func deactivate() -> void:
 	lifecycle_id = ""
 	target_player = null
 	velocity = Vector3.ZERO
+	_visual_yaw = 0.0
 	_wander_target = global_position
 	_wander_time_left = 0.0
 	_attack_cooldown = 0.0
@@ -140,6 +150,9 @@ func deactivate() -> void:
 	if navigation_agent != null:
 		navigation_agent.target_position = global_position
 	_reset_weapon_presentation()
+	if human_visual != null:
+		human_visual.set_visibility_tier(HumanCharacterVisual.VISIBILITY_TIER_HIDDEN)
+		human_visual.rotation = Vector3.ZERO
 
 func tick(delta: float, full_ai: bool) -> void:
 	if not active:
@@ -360,6 +373,7 @@ func _tick_hostile_flee(_delta: float) -> void:
 	velocity.x = away.x * flee_speed
 	velocity.z = away.z * flee_speed
 	move_and_slide()
+	_update_visual_orientation(_delta)
 	_enforce_safe_radius()
 
 func refresh_hostile_awareness() -> bool:
@@ -437,6 +451,7 @@ func _move_toward(destination: Vector3, delta: float, speed: float) -> void:
 	velocity.x = move_toward(velocity.x, direction.x * speed, 10.0 * delta)
 	velocity.z = move_toward(velocity.z, direction.z * speed, 10.0 * delta)
 	move_and_slide()
+	_update_visual_orientation(delta)
 	_enforce_safe_radius()
 
 func _select_wander_target() -> void:
@@ -646,21 +661,51 @@ func was_killed() -> bool:
 	return active and _died
 
 func _apply_profile_visuals() -> void:
-	if profile == null or body_mesh == null:
+	if profile == null:
 		return
-	if _visual_profile != profile:
-		_visual_material = StandardMaterial3D.new()
-		var palette := profile.material_palette
-		_visual_material.albedo_color = palette[0] if not palette.is_empty() else Color.WHITE
-		_visual_material.roughness = 0.84
-		_visual_profile = profile
-	body_mesh.material_override = _visual_material
+	var hostile := profile.is_hostile()
+	if human_visual != null:
+		var visual_height := _get_visual_height(lifecycle_id, hostile)
+		var role := &"hostile" if hostile else &"civilian"
+		var configured := human_visual.configure_from_catalog(HUMAN_CHARACTER_CATALOG, lifecycle_id, role, visual_height)
+		if configured:
+			human_visual.set_visibility_tier(HumanCharacterVisual.VISIBILITY_TIER_FULL)
+			_disable_dynamic_shadows(human_visual.get_body_root())
+			_visual_yaw = 0.0
+			human_visual.rotation = Vector3.ZERO
+	if body_mesh != null:
+		body_mesh.visible = false
+	_visual_profile = profile
 	if warning_marker != null:
-		warning_marker.visible = profile.is_hostile() and profile.warning_marker_enabled
+		warning_marker.visible = hostile and profile.warning_marker_enabled
 	if warning_marker != null and warning_marker.visible:
 		warning_marker.modulate = profile.warning_marker_color
 	if armed_prop != null:
-		armed_prop.visible = profile.is_hostile() and profile.equipped_prop_scene != null
+		armed_prop.visible = hostile and profile.equipped_prop_scene != null
+
+func _get_visual_height(seed_text: String, hostile: bool) -> float:
+	var heights := HOSTILE_VISUAL_HEIGHTS if hostile else CIVILIAN_VISUAL_HEIGHTS
+	var seed := HumanCharacterCatalog.stable_seed(seed_text)
+	return heights[posmod(seed, heights.size())]
+
+func _disable_dynamic_shadows(root: Node3D) -> void:
+	if root == null:
+		return
+	for child in root.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := child as MeshInstance3D
+		if mesh_instance != null:
+			mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+func _update_visual_orientation(delta: float) -> void:
+	if human_visual == null:
+		return
+	var horizontal_velocity := Vector3(velocity.x, 0.0, velocity.z)
+	if horizontal_velocity.length_squared() <= 0.0001:
+		return
+	var direction := horizontal_velocity.normalized()
+	var target_yaw := atan2(-direction.x, -direction.z)
+	_visual_yaw = lerp_angle(_visual_yaw, target_yaw, clampf(maxf(0.0, delta) * VISUAL_YAW_RESPONSE, 0.0, 1.0))
+	human_visual.rotation.y = _visual_yaw
 
 func _on_health_died() -> void:
 	if active and state != State.DISABLED:

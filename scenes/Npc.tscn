@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3]
+[gd_scene load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://scripts/npc/npc.gd" id="1_npc"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="2_health"]
@@ -6,10 +6,11 @@
 [ext_resource type="Resource" path="res://resources/default_hostile_profile.tres" id="4_hostile"]
 [ext_resource type="PackedScene" path="res://scenes/HostileProp.tscn" id="5_prop"]
 [ext_resource type="Script" path="res://scripts/visual/npc_visuals.gd" id="6_visual"]
+[ext_resource type="PackedScene" path="res://scenes/visuals/characters/HumanCharacterVisual.tscn" id="7_human_visual"]
 
 [sub_resource type="CapsuleShape3D" id="NpcShape"]
-radius = 0.32
-height = 1.55
+radius = 0.35
+height = 1.75
 
 [sub_resource type="CapsuleMesh" id="NpcMesh"]
 radius = 0.32
@@ -73,38 +74,44 @@ civilian_profile = ExtResource("3_civilian")
 hostile_profile = ExtResource("4_hostile")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-position = Vector3(0, 0.78, 0)
+position = Vector3(0, 0.875, 0)
 shape = SubResource("NpcShape")
 
 [node name="BodyMesh" type="MeshInstance3D" parent="."]
 position = Vector3(0, 0.78, 0)
 mesh = SubResource("NpcMesh")
 material_override = SubResource("NpcMaterial")
+visible = false
 
 [node name="Jacket" type="MeshInstance3D" parent="."]
 position = Vector3(0, 0.86, -0.02)
 mesh = SubResource("NpcJacketMesh")
 material_override = SubResource("NpcJacketMaterial")
+visible = false
 
 [node name="Head" type="MeshInstance3D" parent="."]
 position = Vector3(0, 1.62, 0)
 mesh = SubResource("NpcHeadMesh")
 material_override = SubResource("NpcHeadMaterial")
+visible = false
 
 [node name="AccentBar" type="MeshInstance3D" parent="."]
 position = Vector3(0, 1.02, -0.235)
 mesh = SubResource("NpcAccentMesh")
 material_override = SubResource("NpcAccentMaterial")
+visible = false
 
 [node name="ShoeLeft" type="MeshInstance3D" parent="."]
 position = Vector3(-0.18, 0.12, -0.04)
 mesh = SubResource("NpcShoesMesh")
 material_override = SubResource("NpcShoesMaterial")
+visible = false
 
 [node name="ShoeRight" type="MeshInstance3D" parent="."]
 position = Vector3(0.18, 0.12, -0.04)
 mesh = SubResource("NpcShoesMesh")
 material_override = SubResource("NpcShoesMaterial")
+visible = false
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
 path_desired_distance = 1.2
@@ -138,3 +145,5 @@ maximum_health = 100.0
 
 [node name="Visuals" type="Node3D" parent="."]
 script = ExtResource("6_visual")
+
+[node name="HumanCharacterVisual" parent="Visuals" instance=ExtResource("7_human_visual")]
