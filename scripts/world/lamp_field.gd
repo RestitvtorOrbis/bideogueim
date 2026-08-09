@@ -251,10 +251,10 @@ func _damage_for_impact_speed(vehicle_speed: float) -> int:
 	if vehicle_speed < MIN_IMPACT_SPEED:
 		return 0
 	if vehicle_speed < MEDIUM_IMPACT_SPEED:
-		return 1
+		return 4
 	if vehicle_speed < HEAVY_IMPACT_SPEED:
-		return 2
-	return 4
+		return 8
+	return 16
 
 
 func _level_for_damage(damage_points: int) -> int:

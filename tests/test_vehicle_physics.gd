@@ -49,37 +49,37 @@ func run() -> Array[Dictionary]:
 
 		var light_impact_index := 2
 		_contact(lamp_field, vehicle, light_impact_index, 1.5, 0.0)
-		_expect(results, "1.5 m/s impact adds one point", lamp_field.get_damage_points(light_impact_index) == 1 and lamp_field.get_distinct_hit_count(light_impact_index) == 1 and lamp_field.get_lamp_level(light_impact_index) == 1)
+		_expect(results, "1.5 m/s impact adds four points and reaches level 3", lamp_field.get_damage_points(light_impact_index) == 4 and lamp_field.get_distinct_hit_count(light_impact_index) == 1 and lamp_field.get_lamp_level(light_impact_index) == 3)
 		_gap(lamp_field)
 
 		var light_band_index := 3
 		_contact(lamp_field, vehicle, light_band_index, 3.99, 0.0)
-		_expect(results, "under 4 m/s impact stays in the one-point band", lamp_field.get_damage_points(light_band_index) == 1 and lamp_field.get_lamp_level(light_band_index) == 1)
+		_expect(results, "under 4 m/s impact stays in the four-point band", lamp_field.get_damage_points(light_band_index) == 4 and lamp_field.get_lamp_level(light_band_index) == 3)
 		_gap(lamp_field)
 
 		var medium_impact_index := 4
 		_contact(lamp_field, vehicle, medium_impact_index, 4.0, 0.0)
-		_expect(results, "4 m/s impact adds two points and reaches level 2", lamp_field.get_damage_points(medium_impact_index) == 2 and lamp_field.get_lamp_level(medium_impact_index) == 2 and is_equal_approx(lamp_field.get_bend_degrees(medium_impact_index), 18.0))
+		_expect(results, "4 m/s impact adds eight points and uproots the lamp", lamp_field.get_damage_points(medium_impact_index) == 8 and lamp_field.get_lamp_level(medium_impact_index) == 5 and is_equal_approx(lamp_field.get_bend_degrees(medium_impact_index), 88.0))
 		_gap(lamp_field)
 
 		var medium_band_index := 5
 		_contact(lamp_field, vehicle, medium_band_index, 7.99, 0.0)
-		_expect(results, "under 8 m/s impact stays in the two-point band", lamp_field.get_damage_points(medium_band_index) == 2 and lamp_field.get_lamp_level(medium_band_index) == 2)
+		_expect(results, "under 8 m/s impact stays in the eight-point band", lamp_field.get_damage_points(medium_band_index) == 8 and lamp_field.get_lamp_level(medium_band_index) == 5)
 		_gap(lamp_field)
 
 		var heavy_impact_index := 6
 		_contact(lamp_field, vehicle, heavy_impact_index, 8.0, 0.0)
-		_expect(results, "8 m/s impact adds four points and reaches level 3", lamp_field.get_damage_points(heavy_impact_index) == 4 and lamp_field.get_lamp_level(heavy_impact_index) == 3 and is_equal_approx(lamp_field.get_bend_degrees(heavy_impact_index), 38.0))
+		_expect(results, "8 m/s impact saturates damage and uproots the lamp", lamp_field.get_damage_points(heavy_impact_index) == 8 and lamp_field.get_lamp_level(heavy_impact_index) == 5 and is_equal_approx(lamp_field.get_bend_degrees(heavy_impact_index), 88.0))
 		_expect(results, "lamp bends away from the vehicle", lamp_field.get_bend_direction(heavy_impact_index).x > 0.9)
 		_gap(lamp_field)
 
 		var repeated_index := 7
 		_contact(lamp_field, vehicle, repeated_index, 1.5, 0.0)
 		_contact(lamp_field, vehicle, repeated_index, 1.5, 0.0)
-		_expect(results, "repeated physics contacts count as one distinct hit", lamp_field.get_damage_points(repeated_index) == 1 and lamp_field.get_distinct_hit_count(repeated_index) == 1)
+		_expect(results, "repeated physics contacts count as one distinct hit", lamp_field.get_damage_points(repeated_index) == 4 and lamp_field.get_distinct_hit_count(repeated_index) == 1)
 		_gap(lamp_field)
 		_contact(lamp_field, vehicle, repeated_index, 1.5, 0.0)
-		_expect(results, "a contact gap permits a later distinct hit", lamp_field.get_damage_points(repeated_index) == 2 and lamp_field.get_distinct_hit_count(repeated_index) == 2 and lamp_field.get_lamp_level(repeated_index) == 2)
+		_expect(results, "a contact gap permits a later distinct hit", lamp_field.get_damage_points(repeated_index) == 8 and lamp_field.get_distinct_hit_count(repeated_index) == 2 and lamp_field.get_lamp_level(repeated_index) == 5)
 		_gap(lamp_field)
 
 		var resting_index := 8
