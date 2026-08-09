@@ -7,7 +7,7 @@
 script = ExtResource("1_profile")
 role = 1
 maximum_health = 100.0
-walk_speed = 2.8
+walk_speed = 3.4
 material_palette = [Color(0.14, 0.16, 0.22, 1), Color(0.56, 0.08, 0.08, 1), Color(0.92, 0.22, 0.12, 1)]
 equipped_prop_scene = ExtResource("2_prop")
 score_category = "hostile"
@@ -19,3 +19,6 @@ attack_interval = 1.5
 attack_damage = 3.0
 aim_spread_degrees = 14.0
 projectile_speed = 24.0
+civilian_target_probability = 0.06
+civilian_target_cooldown = 12.0
+civilian_target_damage = 100.0

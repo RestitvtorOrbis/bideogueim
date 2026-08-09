@@ -38,10 +38,15 @@ func _test_resources(results: Array[Dictionary]) -> void:
 		_expect(results, "vehicle suspension is configured", vehicle.suspension_rest_length > 0.0 and vehicle.suspension_stiffness > 0.0)
 	if civilian != null and hostile != null:
 		_expect(results, "civilian profile is non-hostile", not civilian.is_hostile())
+		_expect(results, "civilian walk speed is 3.0 m/s", is_equal_approx(civilian.walk_speed, 3.0))
+		_expect(results, "hostile walk speed is 3.4 m/s", is_equal_approx(hostile.walk_speed, 3.4))
 		_expect(results, "civilian profile has no equipped prop", civilian.equipped_prop_scene == null)
 		_expect(results, "hostile profile is hostile", hostile.is_hostile())
 		_expect(results, "hostile profile has an equipped prop", hostile.equipped_prop_scene != null)
 		_expect(results, "hostile profile enables warning marker", hostile.warning_marker_enabled)
+		_expect(results, "hostile civilian targeting probability is 0.06", is_equal_approx(hostile.civilian_target_probability, 0.06))
+		_expect(results, "hostile civilian targeting cooldown is 12 seconds", is_equal_approx(hostile.civilian_target_cooldown, 12.0))
+		_expect(results, "hostile civilian target damage covers default health", hostile.civilian_target_damage >= civilian.maximum_health)
 
 	var impact := ImpactEvent.new("contract-life", "Hostile", null, 12.0, Vector3.FORWARD, 4.0)
 	_expect(results, "impact event stores lifecycle contract", impact.npc_id == "contract-life" and impact.npc_role == "Hostile")
@@ -250,6 +255,7 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 	if target_health != null:
 		target_health.damaged.connect(_on_npc_damage)
 	hostile.call("activate", hostile_profile, Vector3(2.0, 1.2, 1.5), "contract-hostile", hostile_group, target)
+	_expect(results, "active hostile registers in role groups", hostile.is_in_group("active_npc") and hostile.is_in_group("active_hostile") and not hostile.is_in_group("active_civilian"))
 	hostile.call("tick", 0.1, true)
 	_expect(results, "hostile enters engage state near player", int(hostile.get("state")) == 2)
 	var first_projectile := _find_live_projectile()
@@ -292,17 +298,87 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 
 	var civilian: Node = preload("res://scenes/Npc.tscn").instantiate()
 	tree.root.add_child(civilian)
-	civilian.call("activate", civilian_profile, Vector3(0.0, 1.2, 4.0), "contract-civilian", &"", target)
+	civilian.call("activate", civilian_profile, Vector3(0.0, 1.2, 20.0), "contract-civilian", &"", target)
+	_expect(results, "active civilian registers in role groups", civilian.is_in_group("active_npc") and civilian.is_in_group("active_civilian") and not civilian.is_in_group("active_hostile"))
 	civilian.call("tick", 0.1, true)
 	_expect(results, "civilian stays in wandering state", int(civilian.get("state")) == 1)
 	_expect(results, "civilian selects a wander target", (civilian.get("_wander_target") as Vector3) != Vector3.ZERO)
+	var civilian_wander_offset := (civilian.get("_wander_target") as Vector3) - target.global_position
+	civilian_wander_offset.y = 0.0
+	_expect(results, "ordinary wander radius is between 8 and 28 meters", civilian_wander_offset.length() >= 8.0 and civilian_wander_offset.length() <= 28.0)
+	_expect(results, "ordinary wander retarget time is between 2 and 5 seconds", float(civilian.get("_wander_time_left")) >= 2.0 and float(civilian.get("_wander_time_left")) <= 5.0)
+
+	var civilian_target: Node = preload("res://scenes/Npc.tscn").instantiate()
+	tree.root.add_child(civilian_target)
+	civilian_target.call("activate", civilian_profile, Vector3(4.0, 1.2, 4.0), "contract-civilian-target", &"", target)
+	var civilian_target_health := civilian_target.get_node("HealthComponent") as HealthComponent
+	hostile.set("_civilian_target_cooldown", 0.0)
+	var rejected_projectile := hostile.call("fire_hostile_projectile", Vector3.ZERO, 0.0, null, 0.99) as Node
+	_expect(results, "probability gate preserves ordinary hostile shots", rejected_projectile != null and is_equal_approx(float(rejected_projectile.get("damage")), 3.0))
+	if rejected_projectile != null:
+		rejected_projectile.queue_free()
+	hostile.set("_civilian_target_cooldown", 0.0)
+	var rejected_target := hostile.call("select_deliberate_civilian_target", 0.99) as Node
+	_expect(results, "civilian targeting rejects a failed deterministic probability roll", rejected_target == null and is_zero_approx(float(hostile.get("_civilian_target_cooldown"))))
+	var deliberate_projectile := hostile.call("fire_hostile_projectile", Vector3.ZERO, 0.0, null, 0.0) as Node
+	var expected_civilian_aim: Vector3 = (hostile.global_position + Vector3.UP * 1.05).direction_to(civilian_target.global_position + Vector3.UP * 0.9)
+	_expect(results, "deterministic hostile shot selects a civilian", deliberate_projectile != null and (deliberate_projectile.get("fired_direction") as Vector3).dot(expected_civilian_aim) > 0.999)
+	_expect(results, "deliberate civilian shot carries one-hit damage", deliberate_projectile != null and float(deliberate_projectile.get("damage")) >= civilian_target_health.maximum_health)
+	var weapon_origin: Vector3 = weapon_pivot.global_position if weapon_pivot != null else hostile.global_position
+	var weapon_target_direction: Vector3 = weapon_origin.direction_to(civilian_target.global_position)
+	weapon_target_direction.y = 0.0
+	var expected_civilian_yaw := atan2(-weapon_target_direction.x, -weapon_target_direction.z)
+	var civilian_yaw_delta := absf(fposmod(weapon_pivot.rotation.y - expected_civilian_yaw + PI, TAU) - PI) if weapon_pivot != null else TAU
+	_expect(results, "weapon aim follows the deliberate civilian target", civilian_yaw_delta < 0.01)
+	_expect(results, "deliberate civilian shot starts its separate cooldown", is_equal_approx(float(hostile.get("_civilian_target_cooldown")), 12.0))
+	var cooldown_target := hostile.call("select_deliberate_civilian_target", 0.0) as Node
+	_expect(results, "civilian targeting cooldown blocks immediate repeat", cooldown_target == null)
+	if deliberate_projectile != null:
+		deliberate_projectile.call("_resolve_impact", {"collider": civilian_target})
+	_expect(results, "deliberate civilian projectile kills a full-health civilian", civilian_target_health != null and is_zero_approx(civilian_target_health.current_health) and bool(civilian_target.call("was_killed")))
+
+	var flee_hostile: Node = preload("res://scenes/Npc.tscn").instantiate()
+	var fleeing_civilian: Node = preload("res://scenes/Npc.tscn").instantiate()
+	tree.root.add_child(flee_hostile)
+	tree.root.add_child(fleeing_civilian)
+	flee_hostile.call("activate", hostile_profile, Vector3(46.0, 1.2, 0.0), "contract-flee-hostile", &"", null)
+	fleeing_civilian.call("activate", civilian_profile, Vector3(40.0, 1.2, 0.0), "contract-flee-civilian", &"", null)
+	_expect(results, "hostile activation registers a hostile role group", flee_hostile.is_in_group("active_hostile"))
+	_expect(results, "civilian activation registers a civilian role group", fleeing_civilian.is_in_group("active_civilian"))
+	var awareness_detected := bool(fleeing_civilian.call("refresh_hostile_awareness"))
+	_expect(results, "civilian detects a nearby hostile", awareness_detected and bool(fleeing_civilian.call("is_hostile_fleeing")) and fleeing_civilian.get("_hostile_flee_target") == flee_hostile)
+	_expect(results, "hostile awareness is throttled after a scan", is_equal_approx(float(fleeing_civilian.get("_hostile_awareness_time_left")), 0.30))
+	var fleeing_start: Vector3 = fleeing_civilian.global_position
+	fleeing_civilian.call("tick", 0.1, true)
+	var fleeing_delta: Vector3 = fleeing_civilian.global_position - fleeing_start
+	fleeing_delta.y = 0.0
+	var expected_flee_direction: Vector3 = flee_hostile.global_position.direction_to(fleeing_start)
+	expected_flee_direction.y = 0.0
+	expected_flee_direction = expected_flee_direction.normalized()
+	_expect(results, "civilian flees directly away from the hostile", fleeing_delta.length() > 0.0 and fleeing_delta.normalized().dot(expected_flee_direction) > 0.99)
+	var fleeing_velocity := fleeing_civilian.get("velocity") as Vector3
+	_expect(results, "civilian hostile-flee speed is 1.8x walk speed", is_equal_approx(fleeing_velocity.length(), civilian_profile.walk_speed * 1.8))
+	flee_hostile.set("global_position", fleeing_civilian.global_position + Vector3(18.0, 0.0, 0.0))
+	_expect(results, "civilian keeps fleeing inside the 20 meter release radius", bool(fleeing_civilian.call("refresh_hostile_awareness")) and bool(fleeing_civilian.call("is_hostile_fleeing")))
+	flee_hostile.set("global_position", fleeing_civilian.global_position + Vector3(21.0, 0.0, 0.0))
+	_expect(results, "civilian returns to wandering outside the release radius", not bool(fleeing_civilian.call("refresh_hostile_awareness")) and not bool(fleeing_civilian.call("is_hostile_fleeing")))
+	_expect(results, "hostile awareness never makes hostiles flee hostiles", not bool(flee_hostile.call("is_hostile_fleeing")))
 	for projectile in tree.get_nodes_in_group("hostile_projectile"):
 		if is_instance_valid(projectile):
 			projectile.queue_free()
 	hostile.call("deactivate")
 	_expect(results, "weapon pivot resets when the hostile returns to its pool", weapon_pivot != null and weapon_pivot.position.is_zero_approx() and weapon_pivot.rotation.is_zero_approx())
+	_expect(results, "deactivation removes hostile role groups", not hostile.is_in_group("active_npc") and not hostile.is_in_group("active_hostile"))
+	civilian_target.call("deactivate")
+	flee_hostile.call("deactivate")
+	fleeing_civilian.call("deactivate")
+	civilian.call("deactivate")
+	_expect(results, "deactivation removes civilian role groups", not civilian_target.is_in_group("active_npc") and not fleeing_civilian.is_in_group("active_civilian"))
 	hostile.queue_free()
 	civilian.queue_free()
+	civilian_target.queue_free()
+	flee_hostile.queue_free()
+	fleeing_civilian.queue_free()
 	vehicle.queue_free()
 	target.queue_free()
 
