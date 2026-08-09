@@ -38,6 +38,7 @@ var _configured: bool = false
 var _elapsed_since_configure: float = 0.0
 var _visibility_cache: Dictionary = {}
 var _visibility_cursor: int = 0
+var _simulation_focus: Node3D
 var _pending_death_replacements: Dictionary = {
 	"civilian": 0,
 	"hostile": 0,
@@ -74,6 +75,7 @@ func configure(world: Node3D, player: Node, settings: CrowdSettings = null) -> v
 	_far_clock = 0.0
 	_elapsed_since_configure = 0.0
 	_clear_visibility_cache()
+	_simulation_focus = null
 	_clear_pending_death_replacements()
 	_configured = _district != null and _player != null and crowd_settings != null
 	if not _configured:
@@ -90,17 +92,20 @@ func configure(world: Node3D, player: Node, settings: CrowdSettings = null) -> v
 	)
 	# The first batch is deliberate: the player sees a living city immediately,
 	# while all later replacements are capped in _physics_process.
-	_ensure_population(initial_count, true, initial_count)
+	_ensure_population(initial_count, true, initial_count, _get_simulation_focus())
 
 func _physics_process(delta: float) -> void:
 	if not _configured or _district == null or _player == null or crowd_settings == null:
 		return
+	var simulation_focus := _get_simulation_focus()
+	if simulation_focus == null:
+		return
 	advance_elapsed_time(delta)
 	# Recycle before replenishing so a dead or distant NPC frees its slot this frame.
 	_recycle_disabled_npcs()
-	_recycle_out_of_range_npcs()
+	_recycle_out_of_range_npcs(simulation_focus)
 	var spawn_budget := clampi(crowd_settings.spawn_budget_per_frame, 0, maxi(0, crowd_settings.active_npc_cap))
-	_ensure_population(spawn_budget)
+	_ensure_population(spawn_budget, false, -1, simulation_focus)
 	_mid_clock += delta
 	_far_clock += delta
 	var run_mid_update := _mid_clock >= maxf(0.02, crowd_settings.mid_update_interval)
@@ -109,10 +114,7 @@ func _physics_process(delta: float) -> void:
 		_mid_clock = 0.0
 	if run_far_update:
 		_far_clock = 0.0
-	var player_node := _player as Node3D
-	if player_node == null:
-		return
-	_refresh_outside_radius_visibility(delta)
+	_refresh_outside_radius_visibility(delta, simulation_focus)
 	for npc in _active_npcs.keys():
 		if not is_instance_valid(npc):
 			continue
@@ -121,7 +123,7 @@ func _physics_process(delta: float) -> void:
 			continue
 		if npc.has_method("configure_run_safety"):
 			npc.call("configure_run_safety", _is_hostile_grace_active(), crowd_settings.hostile_safe_radius)
-		var distance: float = npc_node.global_position.distance_to(player_node.global_position)
+		var distance: float = npc_node.global_position.distance_to(simulation_focus.global_position)
 		if npc.has_method("update_visual_tier"):
 			npc.call(
 				"update_visual_tier",
@@ -130,7 +132,7 @@ func _physics_process(delta: float) -> void:
 				crowd_settings.mid_ai_distance,
 				crowd_settings.visual_hide_distance
 			)
-		var horizontal_distance := _horizontal_distance_to_player(npc_node.global_position, player_node)
+		var horizontal_distance := _horizontal_distance_to_player(npc_node.global_position, simulation_focus)
 		if not _can_npc_move(npc, horizontal_distance):
 			continue
 		if not npc.has_method("tick"):
@@ -143,7 +145,12 @@ func _physics_process(delta: float) -> void:
 		elif run_far_update:
 			npc.call("tick", maxf(0.05, crowd_settings.far_update_interval), false)
 
-func _ensure_population(spawn_budget: int, initial_phase: bool = false, initial_limit: int = -1) -> int:
+func _ensure_population(
+		spawn_budget: int,
+		initial_phase: bool = false,
+		initial_limit: int = -1,
+		simulation_focus: Node3D = null
+	) -> int:
 	if spawn_budget <= 0 or _district == null or _player == null:
 		return 0
 	var cap := maxi(0, crowd_settings.active_npc_cap)
@@ -152,13 +159,14 @@ func _ensure_population(spawn_budget: int, initial_phase: bool = false, initial_
 		target_total = mini(target_total, maxi(0, initial_limit))
 	if target_total <= 0:
 		return 0
+	var focus := simulation_focus if simulation_focus != null else _get_simulation_focus()
 	var spawned := 0
 	var blocked_roles: Dictionary = {}
 	var blocked_replacement_roles: Dictionary = {}
 	while spawned < spawn_budget and active_npc_count < cap:
 		var replacement_role := _next_pending_death_replacement(blocked_replacement_roles)
 		if not replacement_role.is_empty():
-			if _spawn_role(replacement_role, false, false, true):
+			if _spawn_role(replacement_role, false, false, true, focus):
 				_pending_death_replacements[replacement_role] = maxi(
 					0,
 					int(_pending_death_replacements.get(replacement_role, 0)) - 1
@@ -176,7 +184,7 @@ func _ensure_population(spawn_budget: int, initial_phase: bool = false, initial_
 		if role.is_empty():
 			break
 		var prefer_visible := initial_phase and _initial_visible_slots_used < maxi(0, crowd_settings.initial_visible_count)
-		if _spawn_role(role, prefer_visible, initial_phase):
+		if _spawn_role(role, prefer_visible, initial_phase, false, focus):
 			spawned += 1
 			if initial_phase:
 				_initial_spawned_count += 1
@@ -238,7 +246,8 @@ func _spawn_role(
 		role: String,
 		prefer_visible: bool = false,
 		near_player: bool = false,
-		strict_death_replacement: bool = false
+		strict_death_replacement: bool = false,
+		simulation_focus: Node3D = null
 	) -> bool:
 	var points := _get_spawn_points(role)
 	if points.is_empty():
@@ -248,7 +257,8 @@ func _spawn_role(
 		prefer_visible,
 		near_player,
 		_get_spawn_minimum_distance(role, near_player, strict_death_replacement),
-		strict_death_replacement
+		strict_death_replacement,
+		simulation_focus
 	)
 	if not bool(spawn_result.get("found", false)):
 		return false
@@ -272,8 +282,10 @@ func _find_spawn_position(
 		prefer_visible: bool,
 		near_player: bool,
 		spawn_minimum_distance: float = -1.0,
-		strict_offscreen: bool = false
+		strict_offscreen: bool = false,
+		simulation_focus: Node3D = null
 	) -> Dictionary:
+	var focus := simulation_focus if simulation_focus != null else _get_simulation_focus()
 	var shuffled_points := _shuffled_points(points)
 	var attempts := maxi(1, crowd_settings.spawn_candidate_attempts)
 	var best_position := Vector3.ZERO
@@ -283,20 +295,20 @@ func _find_spawn_position(
 	var has_best := false
 	for attempt in range(attempts):
 		var point: Marker3D = shuffled_points[attempt % shuffled_points.size()]
-		var candidate := _build_spawn_candidate(point, near_player, spawn_minimum_distance)
+		var candidate := _build_spawn_candidate(point, near_player, spawn_minimum_distance, focus)
 		if not _is_valid_npc_spawn_position(candidate):
 			continue
-		if not _is_in_spawn_range(candidate):
+		if not _is_in_spawn_range(candidate, focus):
 			continue
-		if strict_offscreen and not _is_at_least_player_distance(candidate, spawn_minimum_distance):
+		if strict_offscreen and not _is_at_least_player_distance(candidate, spawn_minimum_distance, focus):
 			continue
 		var is_visible := _is_in_active_camera_frustum(candidate)
 		if strict_offscreen and is_visible:
 			continue
 		if not _is_separated_from_active(candidate):
 			continue
-		var bucket := _get_spawn_bucket(candidate)
-		var occupancy := _get_spawn_bucket_occupancy(bucket)
+		var bucket := _get_spawn_bucket(candidate, focus)
+		var occupancy := _get_spawn_bucket_occupancy(bucket, focus)
 		var nearest_distance := _get_nearest_active_npc_distance(candidate)
 		var visibility_preference := is_visible == prefer_visible
 		if not has_best or _is_better_spawn_candidate(
@@ -338,11 +350,11 @@ func _is_better_spawn_candidate(
 	# deterministic for deterministic point order and RNG state.
 	return false
 
-func _get_spawn_bucket(world_position: Vector3) -> int:
-	var player_node := _player as Node3D
-	if player_node == null:
+func _get_spawn_bucket(world_position: Vector3, simulation_focus: Node3D = null) -> int:
+	var focus := simulation_focus if simulation_focus != null else _get_simulation_focus()
+	if focus == null:
 		return 0
-	var offset := world_position - player_node.global_position
+	var offset := world_position - focus.global_position
 	offset.y = 0.0
 	var angle := fposmod(atan2(offset.z, offset.x) + PI, TAU)
 	var sector := clampi(
@@ -357,13 +369,14 @@ func _get_spawn_bucket(world_position: Vector3) -> int:
 func _get_active_spawn_radius() -> float:
 	return maxf(1.0, crowd_settings.spawn_distance - crowd_settings.spawn_edge_padding)
 
-func _get_spawn_bucket_occupancy(bucket: int) -> int:
+func _get_spawn_bucket_occupancy(bucket: int, simulation_focus: Node3D = null) -> int:
+	var focus := simulation_focus if simulation_focus != null else _get_simulation_focus()
 	var occupancy := 0
 	for npc in _active_npcs.keys():
 		if not is_instance_valid(npc):
 			continue
 		var npc_node := npc as Node3D
-		if npc_node != null and _get_spawn_bucket(npc_node.global_position) == bucket:
+		if npc_node != null and _get_spawn_bucket(npc_node.global_position, focus) == bucket:
 			occupancy += 1
 	return occupancy
 
@@ -385,16 +398,21 @@ func _is_valid_npc_spawn_position(position: Vector3) -> bool:
 		return true
 	return bool(_district.call("is_npc_spawn_position_valid", position, 0.5))
 
-func _build_spawn_candidate(point: Marker3D, near_player: bool, spawn_minimum_distance: float = -1.0) -> Vector3:
+func _build_spawn_candidate(
+		point: Marker3D,
+		near_player: bool,
+		spawn_minimum_distance: float = -1.0,
+		simulation_focus: Node3D = null
+	) -> Vector3:
 	var anchor := point.global_position
-	var player_node := _player as Node3D
-	if player_node == null:
+	var focus := simulation_focus if simulation_focus != null else _get_simulation_focus()
+	if focus == null:
 		return anchor + Vector3(
 			_spawn_rng.randf_range(-crowd_settings.spawn_jitter_radius, crowd_settings.spawn_jitter_radius),
 			0.0,
 			_spawn_rng.randf_range(-crowd_settings.spawn_jitter_radius, crowd_settings.spawn_jitter_radius)
 		)
-	var player_position := player_node.global_position
+	var player_position := focus.global_position
 	var horizontal_anchor := anchor - player_position
 	horizontal_anchor.y = 0.0
 	var anchor_distance := horizontal_anchor.length()
@@ -469,20 +487,24 @@ func _shuffled_points(points: Array[Marker3D]) -> Array[Marker3D]:
 		shuffled[swap_index] = temporary
 	return shuffled
 
-func _is_in_spawn_range(position: Vector3) -> bool:
-	var player_node := _player as Node3D
-	if player_node == null:
+func _is_in_spawn_range(position: Vector3, simulation_focus: Node3D = null) -> bool:
+	var focus := simulation_focus if simulation_focus != null else _get_simulation_focus()
+	if focus == null:
 		return true
-	var offset := position - player_node.global_position
+	var offset := position - focus.global_position
 	offset.y = 0.0
 	var maximum_distance := maxf(1.0, crowd_settings.spawn_distance - crowd_settings.spawn_edge_padding)
 	return offset.length_squared() <= maximum_distance * maximum_distance + 0.01
 
-func _is_at_least_player_distance(position: Vector3, minimum_distance: float) -> bool:
-	var player_node := _player as Node3D
-	if player_node == null:
+func _is_at_least_player_distance(
+		position: Vector3,
+		minimum_distance: float,
+		simulation_focus: Node3D = null
+	) -> bool:
+	var focus := simulation_focus if simulation_focus != null else _get_simulation_focus()
+	if focus == null:
 		return false
-	var offset := position - player_node.global_position
+	var offset := position - focus.global_position
 	offset.y = 0.0
 	var required_distance := maxf(0.0, minimum_distance)
 	return offset.length_squared() + 0.01 >= required_distance * required_distance
@@ -542,9 +564,13 @@ func _can_npc_move(npc: Node, horizontal_distance: float) -> bool:
 		return false
 	return can_npc_move(horizontal_distance, true, true, bool(cached.get("unobstructed", false)))
 
-func _refresh_outside_radius_visibility(_delta: float) -> void:
+func _refresh_outside_radius_visibility(_delta: float, simulation_focus: Node3D = null) -> void:
 	var camera := _get_active_camera()
 	if camera == null:
+		_clear_visibility_cache()
+		return
+	var focus := simulation_focus if simulation_focus != null else _get_simulation_focus()
+	if focus == null:
 		_clear_visibility_cache()
 		return
 	var far_npcs: Array[Node] = []
@@ -556,10 +582,7 @@ func _refresh_outside_radius_visibility(_delta: float) -> void:
 		if npc_node == null:
 			_visibility_cache.erase(npc)
 			continue
-		var player_node := _player as Node3D
-		if player_node == null:
-			continue
-		if _horizontal_distance_to_player(npc_node.global_position, player_node) > NPC_MOVEMENT_ACTIVATION_RADIUS:
+		if _horizontal_distance_to_player(npc_node.global_position, focus) > NPC_MOVEMENT_ACTIVATION_RADIUS:
 			far_npcs.append(npc)
 		else:
 			_visibility_cache.erase(npc)
@@ -593,6 +616,23 @@ func _get_active_camera() -> Camera3D:
 	var viewport := get_viewport()
 	return viewport.get_camera_3d() if viewport != null else null
 
+func _get_simulation_focus() -> Node3D:
+	var focus: Node3D = _player as Node3D
+	if focus != null and _player != null:
+		var occupied_vehicle: Variant = _player.get("occupied_vehicle")
+		var vehicle := occupied_vehicle as Node3D
+		if (
+			vehicle != null
+			and is_instance_valid(vehicle)
+			and vehicle.is_inside_tree()
+			and not vehicle.is_queued_for_deletion()
+		):
+			focus = vehicle
+	if focus != _simulation_focus:
+		_clear_visibility_cache()
+		_simulation_focus = focus
+	return focus
+
 func _horizontal_distance_to_player(world_position: Vector3, player_node: Node3D) -> float:
 	if player_node == null:
 		return INF
@@ -600,9 +640,9 @@ func _horizontal_distance_to_player(world_position: Vector3, player_node: Node3D
 	offset.y = 0.0
 	return offset.length()
 
-func _recycle_out_of_range_npcs() -> void:
-	var player_node := _player as Node3D
-	if player_node == null:
+func _recycle_out_of_range_npcs(simulation_focus: Node3D = null) -> void:
+	var focus := simulation_focus if simulation_focus != null else _get_simulation_focus()
+	if focus == null:
 		return
 	var recycle_distance := maxf(crowd_settings.despawn_distance, crowd_settings.spawn_distance + 1.0)
 	var recycle_distance_squared := recycle_distance * recycle_distance
@@ -613,7 +653,7 @@ func _recycle_out_of_range_npcs() -> void:
 		var npc_node := npc as Node3D
 		if npc_node == null:
 			continue
-		var offset := npc_node.global_position - player_node.global_position
+		var offset := npc_node.global_position - focus.global_position
 		offset.y = 0.0
 		if offset.length_squared() > recycle_distance_squared:
 			_release_npc(npc)
@@ -664,6 +704,7 @@ func _get_hostile_group_service() -> Node:
 func release_all() -> void:
 	_active_npcs.clear()
 	_clear_visibility_cache()
+	_simulation_focus = null
 	_civilian_pool.release_all()
 	_hostile_pool.release_all()
 	_initial_spawned_count = 0

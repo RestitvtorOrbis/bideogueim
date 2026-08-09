@@ -17,6 +17,7 @@ class SpawnValidityDistrict extends SpawnFixtureDistrict:
 
 class DamageProbe extends Node3D:
 	var damage_total: float = 0.0
+	var occupied_vehicle: Node = null
 
 	func apply_damage(amount: float) -> void:
 		damage_total += amount
@@ -38,6 +39,7 @@ func run() -> Array[Dictionary]:
 	_test_safe_radius_behavior(results)
 	_test_civilian_roaming_anchors(results)
 	_test_visual_distance_tiers(results)
+	_test_vehicle_simulation_focus(results)
 	_test_visibility_activation_contract(results)
 	_test_recycling_and_pool_reuse(results)
 	return results
@@ -461,6 +463,48 @@ func _test_visual_distance_tiers(results: Array[Dictionary]) -> void:
 	var reused_visual := reused.get_node("Visuals/HumanCharacterVisual") as HumanCharacterVisual
 	_expect(results, "pool reuse resets visual tier to full and normal", reused == npc and reused.call("get_visual_tier") == 0 and reused_visual.get_visibility_tier() == HumanCharacterVisual.VISIBILITY_TIER_FULL and reused_visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_NORMAL and (reused_visual.get_node("ModelPivot") as Node3D).visible)
 	civilian_pool.release(reused)
+	_cleanup_fixture(fixture)
+
+func _test_vehicle_simulation_focus(results: Array[Dictionary]) -> void:
+	var settings := _make_settings()
+	settings.initial_population_count = 0
+	settings.initial_visible_count = 0
+	settings.civilian_target_count = 0
+	settings.hostile_target_count = 0
+	settings.spawn_budget_per_frame = 0
+	var fixture := _create_fixture(settings)
+	var manager: Node = fixture["manager"]
+	var player: DamageProbe = fixture["player"]
+	var vehicle := Node3D.new()
+	vehicle.position = Vector3(100.0, 0.0, 0.0)
+	(Engine.get_main_loop() as SceneTree).root.add_child(vehicle)
+
+	var fallback_focus := manager.call("_get_simulation_focus") as Node3D
+	_expect(results, "simulation focus falls back to the player on foot", fallback_focus == player)
+
+	var visibility_cache: Dictionary = manager.get("_visibility_cache")
+	visibility_cache[manager] = {"unobstructed": true, "timestamp": 0.0}
+	player.occupied_vehicle = vehicle
+	var vehicle_focus := manager.call("_get_simulation_focus") as Node3D
+	_expect(results, "simulation focus resolves an occupied in-tree vehicle", vehicle_focus == vehicle)
+	_expect(results, "entering a vehicle clears the visibility cache", int(manager.call("get_visibility_cache_size")) == 0)
+
+	var npc := Node3D.new()
+	npc.position = vehicle.global_position + Vector3(10.0, 0.0, 0.0)
+	(Engine.get_main_loop() as SceneTree).root.add_child(npc)
+	var distance_to_focus := float(manager.call("_horizontal_distance_to_player", npc.global_position, vehicle_focus))
+	var distance_to_stale_player := float(manager.call("_horizontal_distance_to_player", npc.global_position, player))
+	_expect(results, "vehicle-near NPC is far from the stale on-foot player", distance_to_focus <= 20.0 and distance_to_stale_player > 20.0)
+	_expect(results, "vehicle-near NPC remains eligible for movement", bool(manager.call("_can_npc_move", npc, distance_to_focus)))
+
+	visibility_cache[manager] = {"unobstructed": true, "timestamp": 0.0}
+	player.occupied_vehicle = null
+	var returned_focus := manager.call("_get_simulation_focus") as Node3D
+	_expect(results, "exiting a vehicle returns focus to the player", returned_focus == player)
+	_expect(results, "exiting a vehicle clears the visibility cache", int(manager.call("get_visibility_cache_size")) == 0)
+
+	npc.free()
+	vehicle.free()
 	_cleanup_fixture(fixture)
 
 
