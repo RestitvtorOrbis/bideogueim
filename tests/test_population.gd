@@ -96,27 +96,26 @@ func _test_grace_boundaries_and_combat(results: Array[Dictionary]) -> void:
 	settings.civilian_target_count = 1
 	settings.hostile_target_count = 1
 	var fixture := _create_fixture(settings)
-	var manager: Node = fixture["manager"]
-	var player := fixture["player"] as DamageProbe
-	var hostile := _find_role_npc(manager, "hostile")
+	var hostile := _find_role_npc(fixture["manager"], "hostile")
 	var hostile_node := hostile as Node3D
 	hostile_node.global_position = Vector3(1.0, 1.2, 0.0)
-	manager.call("set_elapsed_time", 7.99)
-	var damage_before := player.damage_total
+	fixture["manager"].call("set_elapsed_time", 7.99)
+	var projectiles_before_grace := _live_projectile_count()
 	hostile.call("tick", 0.01, true)
 	_expect(results, "7.99 seconds keeps hostile out of ENGAGE", int(hostile.get("state")) != 2)
-	_expect(results, "7.99 seconds prevents hostile damage", is_equal_approx(player.damage_total, damage_before))
+	_expect(results, "7.99 seconds prevents hostile projectile spawning", _live_projectile_count() == projectiles_before_grace)
 
 	hostile_node.global_position = Vector3(1.0, 1.2, 0.0)
-	manager.call("set_elapsed_time", 8.0)
+	fixture["manager"].call("set_elapsed_time", 8.0)
 	hostile.call("tick", 0.01, true)
 	_expect(results, "8.00 seconds resumes hostile ENGAGE", int(hostile.get("state")) == 2)
-	_expect(results, "8.00 seconds permits the configured attack", is_equal_approx(player.damage_total - damage_before, 8.0))
+	_expect(results, "8.00 seconds spawns one configured projectile", _live_projectile_count() == projectiles_before_grace + 1)
 	var profile := load("res://resources/default_hostile_profile.tres") as NpcProfile
 	_expect(results, "post-grace engagement range is 18 meters", profile != null and is_equal_approx(profile.engagement_range, 18.0))
-	_expect(results, "post-grace attack range is 2.25 meters", profile != null and is_equal_approx(profile.attack_range, 2.25))
-	_expect(results, "post-grace attack interval is 1.25 seconds", profile != null and is_equal_approx(profile.attack_interval, 1.25))
-	_expect(results, "post-grace attack damage is 8", profile != null and is_equal_approx(profile.attack_damage, 8.0))
+	_expect(results, "post-grace attack range is 18 meters", profile != null and is_equal_approx(profile.attack_range, 18.0))
+	_expect(results, "post-grace attack interval is 1.5 seconds", profile != null and is_equal_approx(profile.attack_interval, 1.5))
+	_expect(results, "post-grace attack damage is 3", profile != null and is_equal_approx(profile.attack_damage, 3.0))
+	_expect(results, "post-grace aim spread is 14 degrees", profile != null and is_equal_approx(profile.aim_spread_degrees, 14.0))
 	_cleanup_fixture(fixture)
 
 func _test_safe_radius_behavior(results: Array[Dictionary]) -> void:
@@ -165,6 +164,20 @@ func _test_recycling_and_pool_reuse(results: Array[Dictionary]) -> void:
 	_expect(results, "recycling does not allocate a second population", int(manager.get("pool_allocations")) == allocations_before)
 	_cleanup_fixture(fixture)
 
+func _live_projectile_count() -> int:
+	var count := 0
+	var tree := Engine.get_main_loop() as SceneTree
+	for projectile in tree.get_nodes_in_group("hostile_projectile"):
+		if is_instance_valid(projectile) and not projectile.is_queued_for_deletion():
+			count += 1
+	return count
+
+func _free_projectiles() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	for projectile in tree.get_nodes_in_group("hostile_projectile"):
+		if is_instance_valid(projectile):
+			projectile.queue_free()
+
 func _make_settings() -> CrowdSettings:
 	var settings := CrowdSettings.new()
 	settings.active_npc_cap = 8
@@ -206,6 +219,7 @@ func _create_fixture(settings: CrowdSettings) -> Dictionary:
 	return {"district": district, "player": player, "manager": manager}
 
 func _cleanup_fixture(fixture: Dictionary) -> void:
+	_free_projectiles()
 	var manager: Node = fixture["manager"]
 	manager.call("release_all")
 	fixture["manager"].queue_free()

@@ -214,6 +214,8 @@ fov = 72.0
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("3_health")
 maximum_health = 100.0
+regeneration_rate = 10.0
+regeneration_delay = 60.0
 
 [node name="VisualDirector" type="Node3D" parent="."]
 script = ExtResource("4_visual")

@@ -1,0 +1,82 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/npc/hostile_projectile.gd" id="1_projectile"]
+
+[sub_resource type="StandardMaterial3D" id="TracerMaterial"]
+albedo_color = Color(1, 0.08, 0.015, 1)
+emission_enabled = true
+emission = Color(1, 0.025, 0.005, 1)
+emission_energy_multiplier = 12.0
+shading_mode = 0
+
+[sub_resource type="BoxMesh" id="TracerMesh"]
+size = Vector3(0.07, 0.07, 0.72)
+material = SubResource("TracerMaterial")
+
+[sub_resource type="StandardMaterial3D" id="TrailMaterial"]
+transparency = 1
+albedo_color = Color(1, 0.12, 0.02, 0.55)
+emission_enabled = true
+emission = Color(1, 0.03, 0.005, 1)
+emission_energy_multiplier = 5.0
+shading_mode = 0
+
+[sub_resource type="BoxMesh" id="TrailMesh"]
+size = Vector3(0.045, 0.045, 1.35)
+material = SubResource("TrailMaterial")
+
+[sub_resource type="StandardMaterial3D" id="FlashMaterial"]
+transparency = 1
+albedo_color = Color(1, 0.7, 0.15, 0.9)
+emission_enabled = true
+emission = Color(1, 0.22, 0.02, 1)
+emission_energy_multiplier = 10.0
+shading_mode = 0
+
+[sub_resource type="SphereMesh" id="FlashMesh"]
+radius = 0.28
+height = 0.56
+material = SubResource("FlashMaterial")
+
+[sub_resource type="ParticleProcessMaterial" id="TrailProcess"]
+emission_shape = 1
+emission_sphere_radius = 0.06
+direction = Vector3(0, 0, 1)
+spread = 12.0
+initial_velocity_min = 0.1
+initial_velocity_max = 0.4
+scale_min = 0.4
+scale_max = 0.8
+
+[node name="HostileProjectile" type="Node3D"]
+script = ExtResource("1_projectile")
+
+[node name="TracerBody" type="MeshInstance3D" parent="."]
+mesh = SubResource("TracerMesh")
+
+[node name="TracerLight" type="OmniLight3D" parent="."]
+light_color = Color(1, 0.08, 0.015, 1)
+light_energy = 3.5
+omni_range = 4.0
+
+[node name="Trail" type="GPUParticles3D" parent="."]
+emitting = true
+amount = 10
+lifetime = 0.12
+local_coords = false
+process_material = SubResource("TrailProcess")
+draw_pass_1 = SubResource("TrailMesh")
+
+[node name="ImpactFlash" type="OmniLight3D" parent="."]
+visible = false
+light_color = Color(1, 0.44, 0.06, 1)
+light_energy = 8.0
+omni_range = 4.5
+
+[node name="ImpactFlashMesh" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("FlashMesh")
+
+[node name="ImpactFlashTimer" type="Timer" parent="."]
+wait_time = 0.08
+one_shot = true

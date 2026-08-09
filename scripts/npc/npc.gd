@@ -4,6 +4,7 @@ enum State { INACTIVE, WANDER, ENGAGE, PANIC, FLEE, DISABLED }
 
 @export var civilian_profile: NpcProfile
 @export var hostile_profile: NpcProfile
+@export var hostile_projectile_scene: PackedScene
 
 @onready var navigation_agent: NavigationAgent3D = $NavigationAgent3D
 @onready var health: HealthComponent = $HealthComponent
@@ -36,6 +37,8 @@ func _ready() -> void:
 		civilian_profile = load("res://resources/default_civilian_profile.tres") as NpcProfile
 	if hostile_profile == null:
 		hostile_profile = load("res://resources/default_hostile_profile.tres") as NpcProfile
+	if hostile_projectile_scene == null:
+		hostile_projectile_scene = load("res://scenes/HostileProjectile.tscn") as PackedScene
 	if health != null and not health.died.is_connected(_on_health_died):
 		health.died.connect(_on_health_died)
 	deactivate()
@@ -148,17 +151,68 @@ func _tick_engage(delta: float) -> void:
 	if target_player == null:
 		state = State.WANDER
 		return
-	var distance := global_position.distance_to(target_player.global_position)
+	var target_node := target_player as Node3D
+	if target_node == null:
+		state = State.WANDER
+		return
+	var distance := global_position.distance_to(target_node.global_position)
 	if distance > profile.engagement_range * 1.2:
 		state = State.WANDER
 		return
-	_move_toward(target_player.global_position, delta, profile.walk_speed * 1.15)
+	_move_toward(target_node.global_position, delta, profile.walk_speed * 1.15)
 	_attack_cooldown -= delta
-	if distance <= profile.attack_range and _attack_cooldown <= 0.0:
-		var receiver: Node = target_player.get_damage_target() if target_player.has_method("get_damage_target") else target_player
-		if receiver != null and receiver.has_method("apply_damage"):
-			receiver.apply_damage(profile.attack_damage)
+	var fire_range := minf(profile.attack_range, profile.engagement_range)
+	if distance <= fire_range and _attack_cooldown <= 0.0:
+		fire_hostile_projectile()
 		_attack_cooldown = profile.attack_interval
+
+func fire_hostile_projectile(direction_override: Vector3 = Vector3.ZERO, spread_override: float = -1.0) -> Node:
+	if not active or profile == null or not profile.is_hostile() or hostile_projectile_scene == null:
+		return null
+	var projectile := hostile_projectile_scene.instantiate() as Node3D
+	if projectile == null:
+		return null
+	var projectile_parent: Node = get_tree().current_scene
+	if projectile_parent == null:
+		projectile_parent = get_tree().root
+	projectile_parent.add_child(projectile)
+	var spawn_position := global_position + Vector3.UP * 1.05
+	var direction := direction_override.normalized() if direction_override.length_squared() > 0.000001 else _get_hostile_aim_direction()
+	var requested_spread := profile.aim_spread_degrees if spread_override < 0.0 else spread_override
+	direction = _apply_aim_spread(direction, requested_spread)
+	projectile.call(
+		"launch",
+		self,
+		spawn_position,
+		direction,
+		profile.attack_damage,
+		minf(profile.attack_range, profile.engagement_range),
+		profile.projectile_speed
+	)
+	return projectile
+
+func _get_hostile_aim_direction() -> Vector3:
+	var target_node := target_player as Node3D
+	if target_node == null:
+		return Vector3.FORWARD
+	var spawn_position := global_position + Vector3.UP * 1.05
+	return spawn_position.direction_to(target_node.global_position + Vector3.UP * 0.9)
+
+func _apply_aim_spread(direction: Vector3, spread_degrees: float) -> Vector3:
+	var forward := direction.normalized() if direction.length_squared() > 0.000001 else Vector3.FORWARD
+	if spread_degrees <= 0.0:
+		return forward
+	var right := Vector3.UP.cross(forward)
+	if right.length_squared() <= 0.000001:
+		right = Vector3.RIGHT
+	else:
+		right = right.normalized()
+	var up := forward.cross(right).normalized()
+	var cone_angle := deg_to_rad(spread_degrees) * sqrt(_rng.randf())
+	var azimuth := _rng.randf_range(0.0, TAU)
+	var radial := right * cos(azimuth) + up * sin(azimuth)
+	return (forward * cos(cone_angle) + radial * sin(cone_angle)).normalized()
+
 
 func _tick_flee(delta: float) -> void:
 	if target_player == null:

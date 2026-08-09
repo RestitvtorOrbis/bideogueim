@@ -1,5 +1,8 @@
 extends CharacterBody3D
 
+const HEALTH_REGENERATION_RATE: float = 10.0
+const HEALTH_REGENERATION_DELAY: float = 60.0
+
 @export_range(1.0, 20.0, 0.1) var walk_speed: float = 5.0
 @export_range(1.0, 40.0, 0.1) var sprint_speed: float = 8.0
 @export_range(1.0, 50.0, 0.1) var jump_velocity: float = 7.0
@@ -17,6 +20,7 @@ var _visual_visible_before_vehicle: bool = true
 func _ready() -> void:
 	add_to_group("player")
 	health.configure(100.0)
+	health.configure_regeneration(HEALTH_REGENERATION_RATE, HEALTH_REGENERATION_DELAY)
 	health.died.connect(_on_died)
 	if visual_root != null:
 		_visual_visible_before_vehicle = visual_root.visible
@@ -104,6 +108,11 @@ func apply_damage(amount: float) -> void:
 		occupied_vehicle.apply_damage(amount)
 	else:
 		health.apply_damage(amount)
+
+func get_damage_target() -> Node:
+	if occupied_vehicle != null and occupied_vehicle.has_method("get_damage_target"):
+		return occupied_vehicle.call("get_damage_target") as Node
+	return self if not _is_game_over() else null
 
 func set_occupied_vehicle(vehicle: Node) -> void:
 	var is_occupied := vehicle != null

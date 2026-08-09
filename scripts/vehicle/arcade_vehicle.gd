@@ -1,5 +1,8 @@
 extends RigidBody3D
 
+const HEALTH_REGENERATION_RATE: float = 10.0
+const HEALTH_REGENERATION_DELAY: float = 60.0
+
 signal health_changed(current: float, maximum: float)
 signal destroyed
 
@@ -27,6 +30,7 @@ func _ready() -> void:
 	if not body_entered.is_connected(_on_body_entered):
 		body_entered.connect(_on_body_entered)
 	health.configure(config.maximum_health)
+	health.configure_regeneration(HEALTH_REGENERATION_RATE, HEALTH_REGENERATION_DELAY)
 	health.health_changed.connect(_on_health_changed)
 	health.died.connect(_on_destroyed)
 	camera.current = false

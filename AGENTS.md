@@ -26,3 +26,4 @@ This repository is in beta.
 - A ticket is not considered closed until its dedicated commit succeeds. Do not bundle multiple closed tickets into one commit or spread one ticket across multiple commits.
 - If validation fails, leave the ticket open and document the failure. Create a narrowly scoped follow-up ticket when additional implementation is required; do not silently expand the original ticket.
 - For Sol-Luna work, Sol owns planning and acceptance. Each implementation ticket is assigned to one GPT-5.6 Luna agent with `reasoning_effort: xhigh` unless its recorded dependency and ownership boundaries explicitly permit parallel execution.
+- Launch GPT-5.6 Luna subagents through `multi_agent_v1` (the app-backed task creation path) with `reasoning_effort: xhigh`; do not use the generic collaboration `spawn_agent` path for Luna, because that path does not expose the Luna model in this workspace.

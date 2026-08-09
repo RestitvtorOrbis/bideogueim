@@ -5,6 +5,7 @@ var _npc_damage_events: int = 0
 func run() -> Array[Dictionary]:
 	var results: Array[Dictionary] = []
 	_test_resources(results)
+	_test_projectile_contracts(results)
 	_test_health(results)
 	_test_world_and_vehicle(results)
 	_test_npc_states(results)
@@ -54,20 +55,83 @@ func _test_resources(results: Array[Dictionary]) -> void:
 	violence.apply_preset(ViolenceSettings.Preset.DISABLED)
 	_expect(results, "disabled preset disables every impact channel", not violence.blood_particles_enabled and not violence.decals_enabled and not violence.fragments_enabled and not violence.impact_camera_shake_enabled and not violence.vocal_impact_audio_enabled)
 
+func _test_projectile_contracts(results: Array[Dictionary]) -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	var profile := load("res://resources/default_hostile_profile.tres") as NpcProfile
+	_expect(results, "hostile engagement range is 18 meters", profile != null and is_equal_approx(profile.engagement_range, 18.0))
+	_expect(results, "hostile attack range is 18 meters", profile != null and is_equal_approx(profile.attack_range, 18.0))
+	_expect(results, "hostile attack interval is 1.5 seconds", profile != null and is_equal_approx(profile.attack_interval, 1.5))
+	_expect(results, "hostile shot damage is 3", profile != null and is_equal_approx(profile.attack_damage, 3.0))
+	_expect(results, "hostile aim spread is 14 degrees", profile != null and is_equal_approx(profile.aim_spread_degrees, 14.0))
+	var projectile_scene := load("res://scenes/HostileProjectile.tscn") as PackedScene
+	_expect(results, "hostile projectile scene loads", projectile_scene != null)
+	if projectile_scene == null:
+		return
+	var presentation := projectile_scene.instantiate() as Node3D
+	_expect(results, "projectile has emissive tracer body", presentation != null and presentation.get_node_or_null("TracerBody") != null)
+	_expect(results, "projectile has tracer light or trail", presentation != null and (presentation.get_node_or_null("TracerLight") != null or presentation.get_node_or_null("Trail") != null))
+	_expect(results, "projectile has short impact flash", presentation != null and presentation.get_node_or_null("ImpactFlash") != null and presentation.get_node_or_null("ImpactFlashTimer") != null)
+	tree.root.add_child(presentation)
+	if presentation != null:
+		presentation.call("launch", null, Vector3(0.0, 1.0, 0.0), Vector3.FORWARD, 3.0, 50.0, 24.0)
+		presentation.call("advance", 1.0)
+		_expect(results, "projectile hard-caps travel at 18 meters", float(presentation.get("traveled_distance")) <= 18.001)
+		_expect(results, "projectile expires after finite travel", not bool(presentation.get("is_active")))
+		presentation.queue_free()
+
+	var wall := StaticBody3D.new()
+	wall.collision_layer = 1
+	wall.collision_mask = 0
+	var wall_shape := CollisionShape3D.new()
+	var wall_box := BoxShape3D.new()
+	wall_box.size = Vector3(4.0, 4.0, 0.2)
+	wall_shape.shape = wall_box
+	wall.add_child(wall_shape)
+	tree.root.add_child(wall)
+	wall.global_position = Vector3(0.0, 1.0, -3.0)
+	wall.force_update_transform()
+	var blocked := projectile_scene.instantiate() as Node3D
+	tree.root.add_child(blocked)
+	blocked.call("launch", null, Vector3(0.0, 1.0, 0.0), Vector3.FORWARD, 3.0, 18.0, 24.0)
+	blocked.call("advance", 0.25)
+	_expect(results, "projectile collision mask sweeps World Player Vehicle", int(blocked.get("collision_mask")) == 7)
+	_expect(results, "world wall stops swept projectile before its endpoint", float(blocked.get("traveled_distance")) < 6.0 and not bool(blocked.get("is_active")))
+	blocked.queue_free()
+	wall.queue_free()
+
 func _test_health(results: Array[Dictionary]) -> void:
 	var tree := Engine.get_main_loop() as SceneTree
 	var health := HealthComponent.new()
 	tree.root.add_child(health)
-	health.configure(50.0)
+	health.configure(100.0)
+	health.configure_regeneration(10.0, 60.0)
 	var death_count: Array[int] = [0]
 	health.died.connect(func() -> void: death_count[0] += 1)
-	health.apply_damage(80.0)
+	health.apply_damage(40.0)
+	health.call("_physics_process", 59.99)
+	_expect(results, "regeneration waits through 59.99 seconds", is_equal_approx(health.current_health, 60.0))
+	health.call("_physics_process", 0.01)
+	_expect(results, "regeneration does not heal at the exact 60 second crossing", is_equal_approx(health.current_health, 60.0))
+	health.call("_physics_process", 1.0)
+	_expect(results, "regeneration begins after the delay", is_equal_approx(health.current_health, 70.0))
+	health.apply_damage(10.0)
+	health.call("_physics_process", 59.99)
+	_expect(results, "positive damage resets regeneration delay", is_equal_approx(health.current_health, 60.0))
+	health.call("_physics_process", 0.01)
+	_expect(results, "reset delay has no exact-threshold heal", is_equal_approx(health.current_health, 60.0))
+	health.call("_physics_process", 0.5)
+	_expect(results, "regeneration uses only post-threshold frame time", is_equal_approx(health.current_health, 65.0))
+	health.call("_physics_process", 10.0)
+	_expect(results, "regeneration clamps at maximum", is_equal_approx(health.current_health, 100.0))
+	health.apply_damage(100.0)
 	_expect(results, "health clamps damage at zero", is_zero_approx(health.current_health))
 	_expect(results, "health emits one death signal", death_count[0] == 1)
+	health.call("_physics_process", 60.0)
+	_expect(results, "dead health never regenerates or revives", is_zero_approx(health.current_health))
 	health.apply_damage(10.0)
 	_expect(results, "dead health does not emit repeatedly", death_count[0] == 1)
 	health.reset()
-	_expect(results, "health reset restores configured maximum", is_equal_approx(health.current_health, 50.0))
+	_expect(results, "health reset restores configured maximum", is_equal_approx(health.current_health, 100.0))
 	health.queue_free()
 
 func _test_world_and_vehicle(results: Array[Dictionary]) -> void:
@@ -90,6 +154,10 @@ func _test_world_and_vehicle(results: Array[Dictionary]) -> void:
 	player.global_position = Vector3(4.0, 1.2, 4.0)
 	vehicle.set("global_position", player.global_position)
 	var wheel_rays: Array[Node] = vehicle.find_children("*", "RayCast3D", true, false)
+	var player_health := player.get_node("HealthComponent") as HealthComponent
+	var vehicle_health := vehicle.get_node("HealthComponent") as HealthComponent
+	_expect(results, "player health regenerates at 10 HP/s after 60 seconds", player_health != null and is_equal_approx(player_health.regeneration_rate, 10.0) and is_equal_approx(player_health.regeneration_delay, 60.0))
+	_expect(results, "vehicle health regenerates at 10 HP/s after 60 seconds", vehicle_health != null and is_equal_approx(vehicle_health.regeneration_rate, 10.0) and is_equal_approx(vehicle_health.regeneration_delay, 60.0))
 	_expect(results, "vehicle has four suspension raycasts", wheel_rays.size() == 4)
 	var suspension_wiring_valid := true
 	for ray_node in wheel_rays:
@@ -134,7 +202,8 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 	var target: Node3D = preload("res://scenes/Player.tscn").instantiate() as Node3D
 	tree.root.add_child(target)
 	target.global_position = Vector3.ZERO
-	var hostile_profile := load("res://resources/default_hostile_profile.tres") as NpcProfile
+	var hostile_profile := (load("res://resources/default_hostile_profile.tres") as NpcProfile).duplicate() as NpcProfile
+	hostile_profile.aim_spread_degrees = 0.0
 	var civilian_profile := load("res://resources/default_civilian_profile.tres") as NpcProfile
 	HostileGroupService.reset_run()
 	var hostile_group := HostileGroupService.create_group()
@@ -147,8 +216,27 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 	hostile.call("activate", hostile_profile, Vector3(0.0, 1.2, 1.5), "contract-hostile", hostile_group, target)
 	hostile.call("tick", 0.1, true)
 	_expect(results, "hostile enters engage state near player", int(hostile.get("state")) == 2)
-	_expect(results, "hostile engagement damages the player", target_health != null and target_health.current_health < target_health.maximum_health)
-	_expect(results, "hostile engagement applies exactly one damage event", _npc_damage_events == 1)
+	var first_projectile := _find_live_projectile()
+	_expect(results, "hostile engagement spawns a projectile", first_projectile != null)
+	_expect(results, "projectile fire does not damage before impact", target_health != null and is_equal_approx(target_health.current_health, target_health.maximum_health))
+	if first_projectile != null:
+		first_projectile.call("_resolve_impact", {"collider": target})
+	_expect(results, "projectile impact damages the player", target_health != null and is_equal_approx(target_health.current_health, target_health.maximum_health - 3.0))
+	_expect(results, "projectile impact emits exactly one damage event", _npc_damage_events == 1)
+
+	var vehicle: Node = preload("res://scenes/ArcadeVehicle.tscn").instantiate()
+	tree.root.add_child(vehicle)
+	vehicle.set("global_position", target.global_position)
+	var entered_vehicle := bool(vehicle.call("try_enter", target))
+	var vehicle_health := vehicle.get_node("HealthComponent") as HealthComponent
+	target_health.reset()
+	var occupied_projectile := hostile.call("fire_hostile_projectile", Vector3.ZERO, 0.0) as Node
+	if occupied_projectile != null:
+		occupied_projectile.call("_resolve_impact", {"collider": target})
+	_expect(results, "occupied player routes projectile damage to vehicle", entered_vehicle and vehicle_health != null and is_equal_approx(vehicle_health.current_health, vehicle_health.maximum_health - 3.0))
+	_expect(results, "occupied player health remains protected", target_health != null and is_equal_approx(target_health.current_health, target_health.maximum_health))
+	_expect(results, "NPC health has regeneration disabled", hostile.get_node("HealthComponent").get("regeneration_rate") == 0.0)
+
 	var panic_distance_before: float = hostile.global_position.distance_to(target.global_position)
 	HostileGroupService.record_impact(hostile_group, 0.0)
 	HostileGroupService.record_impact(hostile_group, 1.0)
@@ -163,9 +251,20 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 	civilian.call("tick", 0.1, true)
 	_expect(results, "civilian stays in wandering state", int(civilian.get("state")) == 1)
 	_expect(results, "civilian selects a wander target", (civilian.get("_wander_target") as Vector3) != Vector3.ZERO)
+	for projectile in tree.get_nodes_in_group("hostile_projectile"):
+		if is_instance_valid(projectile):
+			projectile.queue_free()
 	hostile.queue_free()
 	civilian.queue_free()
+	vehicle.queue_free()
 	target.queue_free()
+
+func _find_live_projectile() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	for projectile in tree.get_nodes_in_group("hostile_projectile"):
+		if is_instance_valid(projectile) and not projectile.is_queued_for_deletion():
+			return projectile
+	return null
 
 func _on_npc_damage(_amount: float, _current: float) -> void:
 	_npc_damage_events += 1
