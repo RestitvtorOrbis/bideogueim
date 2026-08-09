@@ -256,6 +256,8 @@ func _find_spawn_position(
 	for attempt in range(attempts):
 		var point: Marker3D = shuffled_points[attempt % shuffled_points.size()]
 		var candidate := _build_spawn_candidate(point, near_player, spawn_minimum_distance)
+		if not _is_valid_npc_spawn_position(candidate):
+			continue
 		if not _is_in_spawn_range(candidate):
 			continue
 		if strict_offscreen and not _is_at_least_player_distance(candidate, spawn_minimum_distance):
@@ -280,6 +282,11 @@ func _find_spawn_position(
 	if has_fallback:
 		return {"found": true, "position": fallback_position}
 	return {"found": false, "position": Vector3.ZERO}
+
+func _is_valid_npc_spawn_position(position: Vector3) -> bool:
+	if _district == null or not _district.has_method("is_npc_spawn_position_valid"):
+		return true
+	return bool(_district.call("is_npc_spawn_position_valid", position, 0.5))
 
 func _build_spawn_candidate(point: Marker3D, near_player: bool, spawn_minimum_distance: float = -1.0) -> Vector3:
 	var anchor := point.global_position

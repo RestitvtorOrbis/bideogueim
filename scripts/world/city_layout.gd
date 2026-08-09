@@ -5,6 +5,21 @@ extends RefCounted
 ## Keeping layout generation separate from scene construction makes it cheap to
 ## validate and guarantees that the same seed produces the same city.
 
+static func is_point_inside_building_footprint(
+		world_position: Vector3,
+		building: Dictionary,
+		clearance: float = 0.5
+	) -> bool:
+	var center: Vector3 = building.get("position", Vector3.ZERO)
+	var width := maxf(0.0, float(building.get("width", 0.0)))
+	var depth := maxf(0.0, float(building.get("depth", 0.0)))
+	var rotation := float(building.get("rotation", 0.0))
+	var safe_clearance := maxf(0.0, clearance)
+	var horizontal_offset := world_position - center
+	horizontal_offset.y = 0.0
+	var local_offset := Basis(Vector3.UP, -rotation) * horizontal_offset
+	return absf(local_offset.x) <= width * 0.5 + safe_clearance and absf(local_offset.z) <= depth * 0.5 + safe_clearance
+
 static func generate(
 		city_seed: int,
 		requested_grid_size: int,

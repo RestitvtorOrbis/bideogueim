@@ -6,6 +6,7 @@ func _init() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	_test_building_footprint_predicate()
 	var district_a := preload("res://scenes/District.tscn").instantiate()
 	var district_b := preload("res://scenes/District.tscn").instantiate()
 	district_a.city_seed = 918273
@@ -20,6 +21,8 @@ func _run() -> void:
 	_expect("city contains multiple parks", district_a.get_park_count() >= 2)
 	_expect("civilian spawns are distributed", district_a.get_spawn_points("civilian").size() >= 32)
 	_expect("hostile spawns are distributed", district_a.get_spawn_points("hostile").size() >= 24)
+	_expect("all generated civilian markers avoid buildings", _all_spawn_points_are_valid(district_a, "civilian"))
+	_expect("all generated hostile markers avoid buildings", _all_spawn_points_are_valid(district_a, "hostile"))
 	_expect("player spawn is available", district_a.get_player_spawn_position().y > 0.0)
 	_expect("vehicle spawn is available", district_a.get_vehicle_spawn_position().y > 0.0)
 	var player_spawn_a: Vector3 = district_a.get_player_spawn_position()
@@ -82,6 +85,29 @@ func _count_nodes(node: Node) -> int:
 	return count
 
 func _expect(name: String, passed: bool) -> void:
+func _test_building_footprint_predicate() -> void:
+	var unrotated := {
+		"position": Vector3(10.0, 8.0, -4.0),
+		"width": 10.0,
+		"depth": 6.0,
+		"rotation": 0.0,
+	}
+	_expect("footprint rejects an unrotated building center", CityLayout.is_point_inside_building_footprint(Vector3(10.0, 1.25, -4.0), unrotated))
+	_expect("footprint includes the unrotated clearance boundary", CityLayout.is_point_inside_building_footprint(Vector3(15.5, 1.25, -4.0), unrotated))
+	_expect("footprint accepts just beyond the unrotated clearance boundary", not CityLayout.is_point_inside_building_footprint(Vector3(15.51, 1.25, -4.0), unrotated))
+
+	var rotated := unrotated.duplicate()
+	rotated["rotation"] = PI * 0.5
+	_expect("footprint rejects a rotated interior point", CityLayout.is_point_inside_building_footprint(Vector3(10.0, 1.25, 1.0), rotated))
+	_expect("rotated footprint includes its clearance boundary", CityLayout.is_point_inside_building_footprint(Vector3(10.0, 1.25, 1.5), rotated))
+	_expect("rotated footprint accepts just beyond its clearance boundary", not CityLayout.is_point_inside_building_footprint(Vector3(10.0, 1.25, 1.51), rotated))
+
+func _all_spawn_points_are_valid(district: Node, role: String) -> bool:
+	for point in district.get_spawn_points(role):
+		if not district.is_npc_spawn_position_valid(point.global_position):
+			return false
+	return true
+
 	_results.append({"name": name, "passed": passed})
 
 func _finish_city_test() -> void:

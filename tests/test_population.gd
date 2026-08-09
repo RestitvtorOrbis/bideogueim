@@ -7,6 +7,14 @@ class SpawnFixtureDistrict extends Node3D:
 	func get_spawn_points(role: String) -> Array[Marker3D]:
 		return _civilian_points if role.to_lower() == "civilian" else _hostile_points
 
+class SpawnValidityDistrict extends SpawnFixtureDistrict:
+	var reject_all_spawns := false
+	var validity_checks: Array[Vector3] = []
+
+	func is_npc_spawn_position_valid(world_position: Vector3, clearance: float = 0.5) -> bool:
+		validity_checks.append(world_position)
+		return not reject_all_spawns
+
 class DamageProbe extends Node3D:
 	var damage_total: float = 0.0
 
@@ -23,6 +31,7 @@ func run() -> Array[Dictionary]:
 	_test_role_specific_spawn_distances(results)
 	_test_same_role_death_replacements(results)
 	_test_strict_replacement_retry(results)
+	_test_building_validity_probe(results)
 	_test_grace_boundaries_and_combat(results)
 	_test_safe_radius_behavior(results)
 	_test_recycling_and_pool_reuse(results)
@@ -117,6 +126,39 @@ func _test_strict_replacement_retry(results: Array[Dictionary]) -> void:
 	var pending_after_retry: Dictionary = manager.get("_pending_death_replacements")
 	_expect(results, "strict death replacement retries in a later frame budget", replacement == original_civilian and int(pending_after_retry.get("civilian", 0)) == 0)
 	_cleanup_fixture(fixture)
+
+func _test_building_validity_probe(results: Array[Dictionary]) -> void:
+	var ordinary_settings := _make_settings()
+	ordinary_settings.initial_population_count = 0
+	ordinary_settings.initial_visible_count = 0
+	ordinary_settings.spawn_candidate_attempts = 3
+	var ordinary_district := SpawnValidityDistrict.new()
+	var ordinary_fixture := _create_fixture(ordinary_settings, ordinary_district)
+	ordinary_district.reject_all_spawns = true
+	var ordinary_manager: Node = ordinary_fixture["manager"]
+	var ordinary_spawned := bool(ordinary_manager.call("_spawn_role", "civilian", false, false))
+	_expect(results, "ordinary replenishment rejects every district-invalid candidate", not ordinary_spawned and int(ordinary_manager.get("active_npc_count")) == 0)
+	_expect(results, "ordinary invalid candidates are probed after candidate construction", ordinary_district.validity_checks.size() == ordinary_settings.spawn_candidate_attempts)
+	_cleanup_fixture(ordinary_fixture)
+
+	var strict_settings := _make_settings()
+	strict_settings.active_npc_cap = 1
+	strict_settings.civilian_target_count = 1
+	strict_settings.hostile_target_count = 0
+	strict_settings.initial_population_count = 1
+	strict_settings.initial_visible_count = 0
+	strict_settings.spawn_budget_per_frame = 1
+	var strict_district := SpawnValidityDistrict.new()
+	var strict_fixture := _create_fixture(strict_settings, strict_district)
+	var strict_manager: Node = strict_fixture["manager"]
+	var original_civilian := _find_role_npc(strict_manager, "civilian")
+	strict_district.reject_all_spawns = true
+	original_civilian.call("apply_damage", 1000.0)
+	strict_manager.call("_physics_process", 0.016)
+	var pending: Dictionary = strict_manager.get("_pending_death_replacements")
+	_expect(results, "strict death replacement rejects every district-invalid candidate", _count_role(strict_manager, "civilian") == 0 and int(pending.get("civilian", 0)) == 1)
+	_expect(results, "strict invalid candidates never reach pool checkout", strict_district.validity_checks.size() > 0)
+	_cleanup_fixture(strict_fixture)
 
 func _test_role_specific_spawn_distances(results: Array[Dictionary]) -> void:
 	var settings := _make_settings()
@@ -253,9 +295,9 @@ func _make_settings() -> CrowdSettings:
 	settings.hostile_grace_period = 8.0
 	return settings
 
-func _create_fixture(settings: CrowdSettings) -> Dictionary:
+func _create_fixture(settings: CrowdSettings, district_override: SpawnFixtureDistrict = null) -> Dictionary:
 	var tree := Engine.get_main_loop() as SceneTree
-	var district := SpawnFixtureDistrict.new()
+	var district := district_override if district_override != null else SpawnFixtureDistrict.new()
 	for index in range(4):
 		var civilian_marker := Marker3D.new()
 		civilian_marker.position = [Vector3(0.0, 1.2, -78.0), Vector3(0.0, 1.2, 78.0), Vector3(-78.0, 1.2, 0.0), Vector3(78.0, 1.2, 0.0)][index]

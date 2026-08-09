@@ -81,6 +81,15 @@ func get_generation_signature() -> String:
 	_ensure_city_built()
 	return str(_layout.get("signature", ""))
 
+func is_npc_spawn_position_valid(world_position: Vector3, clearance: float = 0.5) -> bool:
+	_ensure_city_built()
+	var local_position := to_local(world_position)
+	var buildings: Array = _layout.get("buildings", [])
+	for building in buildings:
+		if CityLayout.is_point_inside_building_footprint(local_position, building, clearance):
+			return false
+	return true
+
 func get_nearest_road_position(world_position: Vector3) -> Vector3:
 	_ensure_city_built()
 	var centers: Array = _layout.get("road_centers", [])
