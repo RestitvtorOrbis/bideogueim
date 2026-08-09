@@ -2,6 +2,9 @@ extends CharacterBody3D
 
 enum State { INACTIVE, WANDER, ENGAGE, PANIC, FLEE, DISABLED }
 
+const WEAPON_RECOIL_DURATION: float = 0.12
+const WEAPON_RECOIL_DISTANCE: float = 0.11
+
 @export var civilian_profile: NpcProfile
 @export var hostile_profile: NpcProfile
 @export var hostile_projectile_scene: PackedScene
@@ -11,6 +14,7 @@ enum State { INACTIVE, WANDER, ENGAGE, PANIC, FLEE, DISABLED }
 @onready var body_mesh: MeshInstance3D = $BodyMesh
 @onready var warning_marker: Label3D = $RoleMarkerAnchor/WarningMarker
 @onready var armed_prop: Node3D = $RoleMarkerAnchor/HostileProp
+@onready var weapon_pivot: Node3D = $RoleMarkerAnchor/HostileProp/WeaponPivot
 
 var profile: NpcProfile
 var state: State = State.INACTIVE
@@ -30,9 +34,14 @@ var _safe_radius: float = 0.0
 var _rng := RandomNumberGenerator.new()
 var _visual_profile: NpcProfile
 var _visual_material: StandardMaterial3D
+var _weapon_pivot_rest_position := Vector3.ZERO
+var _weapon_recoil_time_left: float = 0.0
+var _died: bool = false
 
 func _ready() -> void:
 	_rng.randomize()
+	if weapon_pivot != null:
+		_weapon_pivot_rest_position = weapon_pivot.position
 	if civilian_profile == null:
 		civilian_profile = load("res://resources/default_civilian_profile.tres") as NpcProfile
 	if hostile_profile == null:
@@ -65,6 +74,7 @@ func activate(
 	_disabled_time = 0.0
 	_attack_cooldown = 0.0
 	_panic_time_left = 0.0
+	_died = false
 	global_position = spawn_position
 	velocity = Vector3.ZERO
 	visible = true
@@ -82,6 +92,7 @@ func activate(
 			hostile_service.call("register_member", group_id, self)
 	else:
 		group_id = &""
+	_reset_weapon_presentation()
 	_select_wander_target()
 
 func deactivate() -> void:
@@ -102,11 +113,13 @@ func deactivate() -> void:
 	_disabled_time = 0.0
 	_run_grace_active = false
 	_safe_radius = 0.0
+	_died = false
 	visible = false
 	collision_layer = 0
 	collision_mask = 0
 	if navigation_agent != null:
 		navigation_agent.target_position = global_position
+	_reset_weapon_presentation()
 
 func tick(delta: float, full_ai: bool) -> void:
 	if not active:
@@ -132,12 +145,14 @@ func tick(delta: float, full_ai: bool) -> void:
 		_tick_wander(delta)
 
 func _tick_wander(delta: float) -> void:
+	_update_weapon_presentation(delta, null)
 	_wander_time_left -= delta
 	if _wander_time_left <= 0.0 or global_position.distance_to(_wander_target) < 1.0:
 		_select_wander_target()
 	_move_toward(_wander_target, delta, profile.walk_speed if profile != null else 2.4)
 
 func _tick_far_movement(delta: float) -> void:
+	_update_weapon_presentation(delta, null)
 	if _wander_time_left <= 0.0 or global_position.distance_to(_wander_target) < 2.0:
 		_select_wander_target()
 	var speed := (profile.walk_speed if profile != null else 2.4) * 0.65
@@ -151,14 +166,17 @@ func _tick_engage(delta: float) -> void:
 	if target_player == null:
 		state = State.WANDER
 		return
-	var target_node := target_player as Node3D
+	var target_node := _get_current_aim_target()
 	if target_node == null:
 		state = State.WANDER
+		_update_weapon_presentation(delta, null)
 		return
 	var distance := global_position.distance_to(target_node.global_position)
 	if distance > profile.engagement_range * 1.2:
 		state = State.WANDER
+		_update_weapon_presentation(delta, null)
 		return
+	_update_weapon_presentation(delta, target_node)
 	_move_toward(target_node.global_position, delta, profile.walk_speed * 1.15)
 	_attack_cooldown -= delta
 	var fire_range := minf(profile.attack_range, profile.engagement_range)
@@ -189,14 +207,52 @@ func fire_hostile_projectile(direction_override: Vector3 = Vector3.ZERO, spread_
 		minf(profile.attack_range, profile.engagement_range),
 		profile.projectile_speed
 	)
+	_trigger_weapon_recoil()
+	_update_weapon_presentation(0.0, _get_current_aim_target())
 	return projectile
 
 func _get_hostile_aim_direction() -> Vector3:
-	var target_node := target_player as Node3D
+	var target_node := _get_current_aim_target()
 	if target_node == null:
 		return Vector3.FORWARD
 	var spawn_position := global_position + Vector3.UP * 1.05
 	return spawn_position.direction_to(target_node.global_position + Vector3.UP * 0.9)
+
+func _get_current_aim_target() -> Node3D:
+	if target_player == null or not is_instance_valid(target_player):
+		return null
+	if target_player.has_method("get_damage_target"):
+		var damage_target := target_player.call("get_damage_target") as Node3D
+		if damage_target != null and is_instance_valid(damage_target):
+			return damage_target
+		return null
+	return target_player as Node3D
+
+func _update_weapon_presentation(delta: float, aim_target: Node3D) -> void:
+	if weapon_pivot == null:
+		return
+	if aim_target != null and is_instance_valid(aim_target):
+		var aim_direction := aim_target.global_position - weapon_pivot.global_position
+		aim_direction.y = 0.0
+		if aim_direction.length_squared() > 0.000001:
+			weapon_pivot.rotation = Vector3(0.0, atan2(-aim_direction.x, -aim_direction.z), 0.0)
+	else:
+		weapon_pivot.rotation = Vector3.ZERO
+	_weapon_recoil_time_left = maxf(0.0, _weapon_recoil_time_left - maxf(0.0, delta))
+	var recoil_offset := 0.0
+	if _weapon_recoil_time_left > 0.0:
+		recoil_offset = (_weapon_recoil_time_left / WEAPON_RECOIL_DURATION) * WEAPON_RECOIL_DISTANCE
+	weapon_pivot.position = _weapon_pivot_rest_position + Vector3.BACK * recoil_offset
+
+func _trigger_weapon_recoil() -> void:
+	_weapon_recoil_time_left = WEAPON_RECOIL_DURATION
+
+func _reset_weapon_presentation() -> void:
+	_weapon_recoil_time_left = 0.0
+	if weapon_pivot == null:
+		return
+	weapon_pivot.position = _weapon_pivot_rest_position
+	weapon_pivot.rotation = Vector3.ZERO
 
 func _apply_aim_spread(direction: Vector3, spread_degrees: float) -> Vector3:
 	var forward := direction.normalized() if direction.length_squared() > 0.000001 else Vector3.FORWARD
@@ -215,6 +271,7 @@ func _apply_aim_spread(direction: Vector3, spread_degrees: float) -> Vector3:
 
 
 func _tick_flee(delta: float) -> void:
+	_update_weapon_presentation(delta, null)
 	if target_player == null:
 		state = State.WANDER
 		return
@@ -269,7 +326,8 @@ func _can_engage() -> bool:
 		return false
 	if _is_hostile_grace_active():
 		return false
-	return global_position.distance_to(target_player.global_position) <= profile.engagement_range
+	var target_node := _get_current_aim_target()
+	return target_node != null and global_position.distance_to(target_node.global_position) <= profile.engagement_range
 
 func configure_run_safety(grace_active: bool, safe_radius: float) -> void:
 	var was_grace_active := _run_grace_active
@@ -286,6 +344,7 @@ func _is_hostile_grace_active() -> bool:
 	return _run_grace_active and profile != null and profile.is_hostile() and target_player != null
 
 func _tick_grace(delta: float) -> void:
+	_update_weapon_presentation(delta, null)
 	if not _is_hostile_grace_active():
 		return
 	if _is_inside_safe_radius():
@@ -364,6 +423,7 @@ func receive_vehicle_impact(source: Node, speed: float, impulse: Vector3) -> voi
 	_disabled_time = 0.0
 	collision_layer = 0
 	collision_mask = 0
+	_reset_weapon_presentation()
 	velocity = impulse.normalized() * minf(speed * 0.35, 18.0) if impulse.length() > 0.01 else Vector3.ZERO
 	var role_name := "Hostile" if profile != null and profile.is_hostile() else "Civilian"
 	var timestamp := Time.get_ticks_msec() / 1000.0
@@ -392,6 +452,9 @@ func is_inactive() -> bool:
 func is_disabled() -> bool:
 	return state == State.DISABLED
 
+func was_killed() -> bool:
+	return active and _died
+
 func _apply_profile_visuals() -> void:
 	if profile == null or body_mesh == null:
 		return
@@ -411,11 +474,13 @@ func _apply_profile_visuals() -> void:
 
 func _on_health_died() -> void:
 	if active and state != State.DISABLED:
+		_died = true
 		impact_eligible = false
 		state = State.DISABLED
 		_disabled_time = 1.5
 		collision_layer = 0
 		collision_mask = 0
+		_reset_weapon_presentation()
 
 func _get_hostile_group_service() -> Node:
 	return get_node_or_null("/root/HostileGroupService")

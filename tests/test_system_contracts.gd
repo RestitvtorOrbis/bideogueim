@@ -71,6 +71,8 @@ func _test_projectile_contracts(results: Array[Dictionary]) -> void:
 	_expect(results, "projectile has emissive tracer body", presentation != null and presentation.get_node_or_null("TracerBody") != null)
 	_expect(results, "projectile has tracer light or trail", presentation != null and (presentation.get_node_or_null("TracerLight") != null or presentation.get_node_or_null("Trail") != null))
 	_expect(results, "projectile has short impact flash", presentation != null and presentation.get_node_or_null("ImpactFlash") != null and presentation.get_node_or_null("ImpactFlashTimer") != null)
+	var impact_particles := presentation.get_node_or_null("ImpactParticles") as GPUParticles3D
+	_expect(results, "projectile has a one-shot impact particle burst", impact_particles != null and impact_particles.one_shot and impact_particles.amount >= 16)
 	tree.root.add_child(presentation)
 	if presentation != null:
 		presentation.call("launch", null, Vector3(0.0, 1.0, 0.0), Vector3.FORWARD, 3.0, 50.0, 24.0)
@@ -78,6 +80,16 @@ func _test_projectile_contracts(results: Array[Dictionary]) -> void:
 		_expect(results, "projectile hard-caps travel at 18 meters", float(presentation.get("traveled_distance")) <= 18.001)
 		_expect(results, "projectile expires after finite travel", not bool(presentation.get("is_active")))
 		presentation.queue_free()
+
+	var impact_probe := projectile_scene.instantiate() as Node3D
+	tree.root.add_child(impact_probe)
+	impact_probe.call("launch", null, Vector3(4.0, 2.0, 0.0), Vector3.FORWARD, 3.0, 18.0, 24.0)
+	impact_probe.call("_resolve_impact", {"collider": null})
+	var emitted_particles := impact_probe.get_node_or_null("ImpactParticles") as GPUParticles3D
+	var impact_timer := impact_probe.get_node_or_null("ImpactFlashTimer") as Timer
+	_expect(results, "impact starts the particle burst before cleanup", emitted_particles != null and emitted_particles.emitting)
+	_expect(results, "impact cleanup outlives the particle burst presentation", impact_timer != null and impact_timer.time_left > 0.3)
+	impact_probe.queue_free()
 
 	var wall := StaticBody3D.new()
 	wall.collision_layer = 1
@@ -94,10 +106,34 @@ func _test_projectile_contracts(results: Array[Dictionary]) -> void:
 	tree.root.add_child(blocked)
 	blocked.call("launch", null, Vector3(0.0, 1.0, 0.0), Vector3.FORWARD, 3.0, 18.0, 24.0)
 	blocked.call("advance", 0.25)
-	_expect(results, "projectile collision mask sweeps World Player Vehicle", int(blocked.get("collision_mask")) == 7)
+	_expect(results, "projectile collision mask sweeps World Player Vehicle NPC", int(blocked.get("collision_mask")) == 15)
 	_expect(results, "world wall stops swept projectile before its endpoint", float(blocked.get("traveled_distance")) < 6.0 and not bool(blocked.get("is_active")))
 	blocked.queue_free()
 	wall.queue_free()
+
+	var hostile_profile := load("res://resources/default_hostile_profile.tres") as NpcProfile
+	var civilian_profile := load("res://resources/default_civilian_profile.tres") as NpcProfile
+	var shooter := preload("res://scenes/Npc.tscn").instantiate() as Node3D
+	var interceptor := preload("res://scenes/Npc.tscn").instantiate() as Node3D
+	tree.root.add_child(shooter)
+	tree.root.add_child(interceptor)
+	shooter.call("activate", hostile_profile, Vector3(8.0, 1.0, 0.0), "projectile-shooter", &"", null)
+	interceptor.call("activate", civilian_profile, Vector3(8.0, 1.0, -3.0), "projectile-interceptor", &"", null)
+	shooter.force_update_transform()
+	interceptor.force_update_transform()
+	var interceptor_health := interceptor.get_node("HealthComponent") as HealthComponent
+	var intercepted := projectile_scene.instantiate() as Node3D
+	tree.root.add_child(intercepted)
+	intercepted.call("launch", shooter, shooter.global_position + Vector3.UP * 1.05, Vector3.FORWARD, 3.0, 18.0, 24.0)
+	var npc_query := intercepted.call("_build_swept_query", intercepted.global_position, intercepted.global_position + Vector3.FORWARD * 6.0) as PhysicsRayQueryParameters3D
+	_expect(results, "NPC sweep retains shooter RID exclusion", npc_query != null and npc_query.exclude.has((shooter as CollisionObject3D).get_rid()))
+	interceptor.call("apply_damage", interceptor_health.maximum_health - 3.0)
+	intercepted.call("_resolve_impact", {"collider": interceptor, "position": interceptor.global_position})
+	_expect(results, "NPC projectile impact reaches apply_damage and death lifecycle", interceptor_health != null and is_zero_approx(interceptor_health.current_health) and bool(interceptor.call("was_killed")))
+	_expect(results, "intervening NPC impact terminates the projectile", not bool(intercepted.get("is_active")))
+	intercepted.queue_free()
+	shooter.queue_free()
+	interceptor.queue_free()
 
 func _test_health(results: Array[Dictionary]) -> void:
 	var tree := Engine.get_main_loop() as SceneTree
@@ -213,11 +249,17 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 	_npc_damage_events = 0
 	if target_health != null:
 		target_health.damaged.connect(_on_npc_damage)
-	hostile.call("activate", hostile_profile, Vector3(0.0, 1.2, 1.5), "contract-hostile", hostile_group, target)
+	hostile.call("activate", hostile_profile, Vector3(2.0, 1.2, 1.5), "contract-hostile", hostile_group, target)
 	hostile.call("tick", 0.1, true)
 	_expect(results, "hostile enters engage state near player", int(hostile.get("state")) == 2)
 	var first_projectile := _find_live_projectile()
 	_expect(results, "hostile engagement spawns a projectile", first_projectile != null)
+	var weapon_pivot := hostile.get_node("RoleMarkerAnchor/HostileProp/WeaponPivot") as Node3D
+	_expect(results, "hostile weapon pivot tracks the on-foot target", weapon_pivot != null and absf(weapon_pivot.rotation.y) > 0.05)
+	_expect(results, "hostile weapon recoils when a shot is fired", weapon_pivot != null and weapon_pivot.position.z > 0.05)
+	if first_projectile != null:
+		var expected_on_foot_aim: Vector3 = (hostile.global_position + Vector3.UP * 1.05).direction_to(target.global_position + Vector3.UP * 0.9)
+		_expect(results, "on-foot hostile aim resolves to the player body", (first_projectile.get("fired_direction") as Vector3).dot(expected_on_foot_aim) > 0.999)
 	_expect(results, "projectile fire does not damage before impact", target_health != null and is_equal_approx(target_health.current_health, target_health.maximum_health))
 	if first_projectile != null:
 		first_projectile.call("_resolve_impact", {"collider": target})
@@ -229,9 +271,12 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 	vehicle.set("global_position", target.global_position)
 	var entered_vehicle := bool(vehicle.call("try_enter", target))
 	var vehicle_health := vehicle.get_node("HealthComponent") as HealthComponent
+	vehicle.set("global_position", Vector3(6.0, 0.0, 0.0))
 	target_health.reset()
 	var occupied_projectile := hostile.call("fire_hostile_projectile", Vector3.ZERO, 0.0) as Node
 	if occupied_projectile != null:
+		var expected_vehicle_aim: Vector3 = (hostile.global_position + Vector3.UP * 1.05).direction_to((vehicle.get("global_position") as Vector3) + Vector3.UP * 0.9)
+		_expect(results, "occupied hostile aim resolves to the vehicle current position", (occupied_projectile.get("fired_direction") as Vector3).dot(expected_vehicle_aim) > 0.999)
 		occupied_projectile.call("_resolve_impact", {"collider": target})
 	_expect(results, "occupied player routes projectile damage to vehicle", entered_vehicle and vehicle_health != null and is_equal_approx(vehicle_health.current_health, vehicle_health.maximum_health - 3.0))
 	_expect(results, "occupied player health remains protected", target_health != null and is_equal_approx(target_health.current_health, target_health.maximum_health))
@@ -254,6 +299,8 @@ func _test_npc_states(results: Array[Dictionary]) -> void:
 	for projectile in tree.get_nodes_in_group("hostile_projectile"):
 		if is_instance_valid(projectile):
 			projectile.queue_free()
+	hostile.call("deactivate")
+	_expect(results, "weapon pivot resets when the hostile returns to its pool", weapon_pivot != null and weapon_pivot.position.is_zero_approx() and weapon_pivot.rotation.is_zero_approx())
 	hostile.queue_free()
 	civilian.queue_free()
 	vehicle.queue_free()

@@ -21,6 +21,8 @@ func run() -> Array[Dictionary]:
 	_test_settings_contract(results)
 	_test_initial_population_and_budget(results)
 	_test_role_specific_spawn_distances(results)
+	_test_same_role_death_replacements(results)
+	_test_strict_replacement_retry(results)
 	_test_grace_boundaries_and_combat(results)
 	_test_safe_radius_behavior(results)
 	_test_recycling_and_pool_reuse(results)
@@ -36,6 +38,7 @@ func _test_settings_contract(results: Array[Dictionary]) -> void:
 	_expect(results, "initial civilian spawn floor is 20 meters", settings != null and is_equal_approx(settings.initial_civilian_minimum_spawn_distance, 20.0))
 	_expect(results, "initial hostile spawn floor is 35 meters", settings != null and is_equal_approx(settings.initial_hostile_minimum_spawn_distance, 35.0))
 	_expect(results, "hostile respawn floor is 30 meters", settings != null and is_equal_approx(settings.hostile_respawn_minimum_spawn_distance, 30.0))
+	_expect(results, "death replacement floor is 30 meters for every role", settings != null and is_equal_approx(settings.death_replacement_minimum_spawn_distance, 30.0))
 	_expect(results, "hostile safe radius is 30 meters", settings != null and is_equal_approx(settings.hostile_safe_radius, 30.0))
 	_expect(results, "hostile grace period is 8 seconds", settings != null and is_equal_approx(settings.hostile_grace_period, 8.0))
 
@@ -61,6 +64,58 @@ func _test_initial_population_and_budget(results: Array[Dictionary]) -> void:
 	var after_budget := int(manager.get("active_npc_count"))
 	_expect(results, "replenishment is capped per frame", after_budget - before_budget <= settings.spawn_budget_per_frame)
 	_expect(results, "visible spawn preference never aborts a spawn", bool(manager.call("_spawn_role", "civilian", true, true)))
+	_cleanup_fixture(fixture)
+
+func _test_same_role_death_replacements(results: Array[Dictionary]) -> void:
+	var settings := _make_settings()
+	settings.active_npc_cap = 2
+	settings.civilian_target_count = 1
+	settings.hostile_target_count = 1
+	settings.initial_population_count = 2
+	settings.initial_visible_count = 0
+	settings.spawn_budget_per_frame = 2
+	var fixture := _create_fixture(settings)
+	var manager: Node = fixture["manager"]
+	var player: Node3D = fixture["player"]
+	var original_civilian := _find_role_npc(manager, "civilian")
+	var original_hostile := _find_role_npc(manager, "hostile")
+	var allocations_before := int(manager.get("pool_allocations"))
+	original_civilian.call("apply_damage", 1000.0)
+	original_hostile.call("apply_damage", 1000.0)
+	manager.call("_physics_process", 0.016)
+	var replacement_civilian := _find_role_npc(manager, "civilian")
+	var replacement_hostile := _find_role_npc(manager, "hostile")
+	_expect(results, "civilian death preserves its role through pooled replacement", replacement_civilian == original_civilian and _count_role(manager, "civilian") == 1)
+	_expect(results, "hostile death preserves its role through pooled replacement", replacement_hostile == original_hostile and _count_role(manager, "hostile") == 1)
+	_expect(results, "civilian death replacement is at least 30 meters away", replacement_civilian != null and _horizontal_distance(replacement_civilian as Node3D, player) >= 30.0)
+	_expect(results, "hostile death replacement is at least 30 meters away", replacement_hostile != null and _horizontal_distance(replacement_hostile as Node3D, player) >= 30.0)
+	_expect(results, "death replacements are strictly outside the active camera frustum", replacement_civilian != null and replacement_hostile != null and not bool(manager.call("_is_in_active_camera_frustum", (replacement_civilian as Node3D).global_position)) and not bool(manager.call("_is_in_active_camera_frustum", (replacement_hostile as Node3D).global_position)))
+	_expect(results, "death replacements reuse existing pool allocations", int(manager.get("pool_allocations")) == allocations_before)
+	_cleanup_fixture(fixture)
+
+func _test_strict_replacement_retry(results: Array[Dictionary]) -> void:
+	var settings := _make_settings()
+	settings.active_npc_cap = 1
+	settings.civilian_target_count = 1
+	settings.hostile_target_count = 0
+	settings.initial_population_count = 1
+	settings.initial_visible_count = 0
+	settings.spawn_budget_per_frame = 1
+	var fixture := _create_fixture(settings)
+	var manager: Node = fixture["manager"]
+	var district: SpawnFixtureDistrict = fixture["district"]
+	var original_civilian := _find_role_npc(manager, "civilian")
+	var saved_points: Array[Marker3D] = district._civilian_points.duplicate()
+	district._civilian_points.clear()
+	original_civilian.call("apply_damage", 1000.0)
+	manager.call("_physics_process", 0.016)
+	var pending_after_failure: Dictionary = manager.get("_pending_death_replacements")
+	_expect(results, "strict death replacement failure does not spawn a visible fallback", _count_role(manager, "civilian") == 0 and int(pending_after_failure.get("civilian", 0)) == 1)
+	district._civilian_points.assign(saved_points)
+	manager.call("_physics_process", 0.016)
+	var replacement := _find_role_npc(manager, "civilian")
+	var pending_after_retry: Dictionary = manager.get("_pending_death_replacements")
+	_expect(results, "strict death replacement retries in a later frame budget", replacement == original_civilian and int(pending_after_retry.get("civilian", 0)) == 0)
 	_cleanup_fixture(fixture)
 
 func _test_role_specific_spawn_distances(results: Array[Dictionary]) -> void:
@@ -193,6 +248,7 @@ func _make_settings() -> CrowdSettings:
 	settings.initial_civilian_minimum_spawn_distance = 20.0
 	settings.initial_hostile_minimum_spawn_distance = 35.0
 	settings.hostile_respawn_minimum_spawn_distance = 30.0
+	settings.death_replacement_minimum_spawn_distance = 30.0
 	settings.hostile_safe_radius = 30.0
 	settings.hostile_grace_period = 8.0
 	return settings

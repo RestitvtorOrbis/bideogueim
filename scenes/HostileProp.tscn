@@ -17,7 +17,9 @@ height = 0.85
 
 [node name="HostileProp" type="Node3D"]
 
-[node name="Mesh" type="MeshInstance3D" parent="."]
+[node name="WeaponPivot" type="Node3D" parent="."]
+
+[node name="Mesh" type="MeshInstance3D" parent="WeaponPivot"]
 rotation_degrees = Vector3(0, 0, -12)
 position = Vector3(0.32, 0.0, -0.12)
 mesh = SubResource("PropMesh")

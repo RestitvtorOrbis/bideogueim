@@ -16,6 +16,8 @@ func run() -> Array[Dictionary]:
 	player.global_position = vehicle.get("global_position") as Vector3
 	var entered := bool(vehicle.call("try_enter", player))
 	_expect(results, "physics smoke enters vehicle", entered)
+	_expect(results, "forward motion keeps brake force available", bool(vehicle.call("_should_apply_forward_brake", true, 4.0)))
+	_expect(results, "reverse propulsion is not counter-braked", not bool(vehicle.call("_should_apply_forward_brake", true, -4.0)))
 	Input.action_press("accelerate", 1.0)
 	for _index in 30:
 		await tree.physics_frame

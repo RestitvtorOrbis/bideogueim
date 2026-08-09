@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/npc/hostile_projectile.gd" id="1_projectile"]
 
@@ -48,6 +48,30 @@ initial_velocity_max = 0.4
 scale_min = 0.4
 scale_max = 0.8
 
+[sub_resource type="StandardMaterial3D" id="ImpactParticleMaterial"]
+transparency = 1
+albedo_color = Color(1, 0.35, 0.025, 0.95)
+emission_enabled = true
+emission = Color(1, 0.08, 0.005, 1)
+emission_energy_multiplier = 9.0
+shading_mode = 0
+
+[sub_resource type="SphereMesh" id="ImpactParticleMesh"]
+radius = 0.065
+height = 0.13
+radial_segments = 8
+rings = 4
+material = SubResource("ImpactParticleMaterial")
+
+[sub_resource type="ParticleProcessMaterial" id="ImpactParticleProcess"]
+direction = Vector3(0, 1, 0)
+spread = 180.0
+gravity = Vector3(0, -5, 0)
+initial_velocity_min = 3.5
+initial_velocity_max = 7.0
+scale_min = 0.6
+scale_max = 1.35
+
 [node name="HostileProjectile" type="Node3D"]
 script = ExtResource("1_projectile")
 
@@ -77,6 +101,16 @@ omni_range = 4.5
 visible = false
 mesh = SubResource("FlashMesh")
 
+[node name="ImpactParticles" type="GPUParticles3D" parent="."]
+emitting = false
+amount = 24
+lifetime = 0.35
+one_shot = true
+explosiveness = 1.0
+local_coords = false
+process_material = SubResource("ImpactParticleProcess")
+draw_pass_1 = SubResource("ImpactParticleMesh")
+
 [node name="ImpactFlashTimer" type="Timer" parent="."]
-wait_time = 0.08
+wait_time = 0.4
 one_shot = true

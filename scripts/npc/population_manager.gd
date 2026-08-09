@@ -28,6 +28,10 @@ var _initial_spawned_count: int = 0
 var _initial_visible_slots_used: int = 0
 var _configured: bool = false
 var _elapsed_since_configure: float = 0.0
+var _pending_death_replacements: Dictionary = {
+	"civilian": 0,
+	"hostile": 0,
+}
 
 func _ready() -> void:
 	_spawn_rng.randomize()
@@ -59,6 +63,7 @@ func configure(world: Node3D, player: Node, settings: CrowdSettings = null) -> v
 	_mid_clock = 0.0
 	_far_clock = 0.0
 	_elapsed_since_configure = 0.0
+	_clear_pending_death_replacements()
 	_configured = _district != null and _player != null and crowd_settings != null
 	if not _configured:
 		return
@@ -124,7 +129,24 @@ func _ensure_population(spawn_budget: int, initial_phase: bool = false, initial_
 		return 0
 	var spawned := 0
 	var blocked_roles: Dictionary = {}
-	while spawned < spawn_budget and active_npc_count < cap and active_npc_count < target_total:
+	var blocked_replacement_roles: Dictionary = {}
+	while spawned < spawn_budget and active_npc_count < cap:
+		var replacement_role := _next_pending_death_replacement(blocked_replacement_roles)
+		if not replacement_role.is_empty():
+			if _spawn_role(replacement_role, false, false, true):
+				_pending_death_replacements[replacement_role] = maxi(
+					0,
+					int(_pending_death_replacements.get(replacement_role, 0)) - 1
+				)
+				spawned += 1
+				blocked_replacement_roles.clear()
+				continue
+			blocked_replacement_roles[replacement_role] = true
+			if _all_pending_death_replacements_blocked(blocked_replacement_roles):
+				break
+			continue
+		if active_npc_count >= target_total:
+			break
 		var role := _choose_role_for_spawn(initial_phase, initial_limit, blocked_roles)
 		if role.is_empty():
 			break
@@ -142,6 +164,18 @@ func _ensure_population(spawn_budget: int, initial_phase: bool = false, initial_
 		if blocked_roles.has("civilian") and blocked_roles.has("hostile"):
 			break
 	return spawned
+
+func _next_pending_death_replacement(blocked_roles: Dictionary) -> String:
+	for role in ["civilian", "hostile"]:
+		if int(_pending_death_replacements.get(role, 0)) > 0 and not blocked_roles.has(role):
+			return role
+	return ""
+
+func _all_pending_death_replacements_blocked(blocked_roles: Dictionary) -> bool:
+	for role in ["civilian", "hostile"]:
+		if int(_pending_death_replacements.get(role, 0)) > 0 and not blocked_roles.has(role):
+			return false
+	return true
 
 func _choose_role_for_spawn(initial_phase: bool, initial_limit: int, blocked_roles: Dictionary) -> String:
 	var targets := _effective_targets()
@@ -175,7 +209,12 @@ func _choose_role_for_spawn(initial_phase: bool, initial_limit: int, blocked_rol
 	_role_cursor = 1 - _role_cursor
 	return selected
 
-func _spawn_role(role: String, prefer_visible: bool = false, near_player: bool = false) -> bool:
+func _spawn_role(
+		role: String,
+		prefer_visible: bool = false,
+		near_player: bool = false,
+		strict_death_replacement: bool = false
+	) -> bool:
 	var points := _get_spawn_points(role)
 	if points.is_empty():
 		return false
@@ -183,7 +222,8 @@ func _spawn_role(role: String, prefer_visible: bool = false, near_player: bool =
 		points,
 		prefer_visible,
 		near_player,
-		_get_spawn_minimum_distance(role, near_player)
+		_get_spawn_minimum_distance(role, near_player, strict_death_replacement),
+		strict_death_replacement
 	)
 	if not bool(spawn_result.get("found", false)):
 		return false
@@ -206,7 +246,8 @@ func _find_spawn_position(
 		points: Array[Marker3D],
 		prefer_visible: bool,
 		near_player: bool,
-		spawn_minimum_distance: float = -1.0
+		spawn_minimum_distance: float = -1.0,
+		strict_offscreen: bool = false
 	) -> Dictionary:
 	var shuffled_points := _shuffled_points(points)
 	var attempts := maxi(1, crowd_settings.spawn_candidate_attempts)
@@ -217,17 +258,25 @@ func _find_spawn_position(
 		var candidate := _build_spawn_candidate(point, near_player, spawn_minimum_distance)
 		if not _is_in_spawn_range(candidate):
 			continue
+		if strict_offscreen and not _is_at_least_player_distance(candidate, spawn_minimum_distance):
+			continue
 		var is_separated := _is_separated_from_active(candidate)
 		if not has_fallback:
 			fallback_position = candidate
 			has_fallback = true
 		var is_visible := _is_in_active_camera_frustum(candidate)
+		if strict_offscreen:
+			if not is_visible and is_separated:
+				return {"found": true, "position": candidate}
+			continue
 		if prefer_visible and is_visible and is_separated:
 			return {"found": true, "position": candidate}
 		if not prefer_visible and not is_visible and is_separated:
 			return {"found": true, "position": candidate}
-	# Visibility is a preference, never a hard failure. Separation is also relaxed
-	# for the bounded fallback so a busy city cannot starve its population.
+	# Ordinary replenishment keeps visibility as a preference and may relax
+	# separation. Death replacements never use this visible fallback.
+	if strict_offscreen:
+		return {"found": false, "position": Vector3.ZERO}
 	if has_fallback:
 		return {"found": true, "position": fallback_position}
 	return {"found": false, "position": Vector3.ZERO}
@@ -291,8 +340,14 @@ func _get_spawn_points(role: String) -> Array[Marker3D]:
 				points.append(point)
 	return points
 
-func _get_spawn_minimum_distance(role: String, initial_phase: bool) -> float:
+func _get_spawn_minimum_distance(
+		role: String,
+		initial_phase: bool,
+		strict_death_replacement: bool = false
+	) -> float:
 	var configured_minimum := maxf(0.0, crowd_settings.minimum_spawn_distance)
+	if strict_death_replacement:
+		return maxf(configured_minimum, crowd_settings.death_replacement_minimum_spawn_distance)
 	if initial_phase:
 		if role == "hostile":
 			return maxf(configured_minimum, crowd_settings.initial_hostile_minimum_spawn_distance)
@@ -318,6 +373,15 @@ func _is_in_spawn_range(position: Vector3) -> bool:
 	offset.y = 0.0
 	var maximum_distance := maxf(1.0, crowd_settings.spawn_distance - crowd_settings.spawn_edge_padding)
 	return offset.length_squared() <= maximum_distance * maximum_distance + 0.01
+
+func _is_at_least_player_distance(position: Vector3, minimum_distance: float) -> bool:
+	var player_node := _player as Node3D
+	if player_node == null:
+		return false
+	var offset := position - player_node.global_position
+	offset.y = 0.0
+	var required_distance := maxf(0.0, minimum_distance)
+	return offset.length_squared() + 0.01 >= required_distance * required_distance
 
 func _is_separated_from_active(position: Vector3) -> bool:
 	var separation := maxf(0.0, crowd_settings.minimum_npc_separation)
@@ -366,7 +430,14 @@ func _recycle_out_of_range_npcs() -> void:
 func _recycle_disabled_npcs() -> void:
 	for npc in _active_npcs.keys():
 		if is_instance_valid(npc) and npc.has_method("is_disabled_for_recycle") and npc.call("is_disabled_for_recycle"):
+			var replacement_role := ""
+			if npc.has_method("was_killed") and bool(npc.call("was_killed")):
+				replacement_role = String(_active_npcs.get(npc, ""))
 			_release_npc(npc)
+			if not replacement_role.is_empty():
+				_pending_death_replacements[replacement_role] = int(
+					_pending_death_replacements.get(replacement_role, 0)
+				) + 1
 
 func _release_npc(npc: Node) -> void:
 	if not _active_npcs.has(npc):
@@ -405,6 +476,11 @@ func release_all() -> void:
 	_initial_spawned_count = 0
 	_initial_visible_slots_used = 0
 	_elapsed_since_configure = 0.0
+	_clear_pending_death_replacements()
+
+func _clear_pending_death_replacements() -> void:
+	_pending_death_replacements["civilian"] = 0
+	_pending_death_replacements["hostile"] = 0
 
 func advance_elapsed_time(delta: float) -> void:
 	if delta <= 0.0:

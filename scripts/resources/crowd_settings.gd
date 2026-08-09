@@ -19,6 +19,7 @@ extends Resource
 @export_range(0.0, 500.0, 0.5) var initial_civilian_minimum_spawn_distance: float = 20.0
 @export_range(0.0, 500.0, 0.5) var initial_hostile_minimum_spawn_distance: float = 35.0
 @export_range(0.0, 500.0, 0.5) var hostile_respawn_minimum_spawn_distance: float = 30.0
+@export_range(0.0, 500.0, 0.5) var death_replacement_minimum_spawn_distance: float = 30.0
 @export_range(0.0, 500.0, 0.5) var hostile_safe_radius: float = 30.0
 @export_range(0.0, 120.0, 0.05) var hostile_grace_period: float = 8.0
 @export_range(10.0, 1000.0, 1.0) var despawn_distance: float = 130.0

@@ -58,7 +58,7 @@ func _physics_process(_delta: float) -> void:
 	var forward_speed := linear_velocity.dot(forward)
 	if absf(forward_speed) < config.maximum_speed or signf(throttle) != signf(forward_speed):
 		apply_central_force(forward * throttle * config.engine_force)
-	if Input.is_action_pressed("brake_reverse") and absf(forward_speed) > 0.5:
+	if _should_apply_forward_brake(Input.is_action_pressed("brake_reverse"), forward_speed):
 		apply_central_force(-linear_velocity.normalized() * config.brake_force)
 	if Input.is_action_pressed("handbrake"):
 		var lateral := global_transform.basis.x * linear_velocity.dot(global_transform.basis.x)
@@ -74,6 +74,9 @@ func _physics_process(_delta: float) -> void:
 		reset_to_nearest_road()
 	if Input.is_action_just_pressed("interact_vehicle"):
 		exit_vehicle()
+
+func _should_apply_forward_brake(brake_reverse_pressed: bool, forward_speed: float) -> bool:
+	return brake_reverse_pressed and forward_speed > 0.5
 
 func _apply_suspension() -> void:
 	for ray in _wheel_rays:

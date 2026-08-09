@@ -8,7 +8,8 @@ const HARD_MAX_TRAVEL_DISTANCE: float = 18.0
 const WORLD_COLLISION_MASK: int = 1
 const PLAYER_COLLISION_MASK: int = 2
 const VEHICLE_COLLISION_MASK: int = 4
-const TARGET_COLLISION_MASK: int = WORLD_COLLISION_MASK | PLAYER_COLLISION_MASK | VEHICLE_COLLISION_MASK
+const NPC_COLLISION_MASK: int = 8
+const TARGET_COLLISION_MASK: int = WORLD_COLLISION_MASK | PLAYER_COLLISION_MASK | VEHICLE_COLLISION_MASK | NPC_COLLISION_MASK
 
 @export_range(0.1, 100.0, 0.1) var speed: float = 24.0
 @export_range(0.0, 18.0, 0.1) var max_travel_distance: float = HARD_MAX_TRAVEL_DISTANCE
@@ -20,6 +21,7 @@ const TARGET_COLLISION_MASK: int = WORLD_COLLISION_MASK | PLAYER_COLLISION_MASK 
 @onready var trail: GPUParticles3D = get_node_or_null("Trail") as GPUParticles3D
 @onready var impact_flash: OmniLight3D = get_node_or_null("ImpactFlash") as OmniLight3D
 @onready var impact_flash_mesh: MeshInstance3D = get_node_or_null("ImpactFlashMesh") as MeshInstance3D
+@onready var impact_particles: GPUParticles3D = get_node_or_null("ImpactParticles") as GPUParticles3D
 @onready var impact_flash_timer: Timer = get_node_or_null("ImpactFlashTimer") as Timer
 
 var shooter: Node
@@ -87,6 +89,9 @@ func _swept_world_query(start: Vector3, end: Vector3) -> Dictionary:
 	var space := world.direct_space_state
 	if space == null:
 		return {}
+	return space.intersect_ray(_build_swept_query(start, end))
+
+func _build_swept_query(start: Vector3, end: Vector3) -> PhysicsRayQueryParameters3D:
 	var query := PhysicsRayQueryParameters3D.create(start, end, collision_mask)
 	query.collide_with_bodies = true
 	query.collide_with_areas = true
@@ -94,7 +99,7 @@ func _swept_world_query(start: Vector3, end: Vector3) -> Dictionary:
 	if shooter is CollisionObject3D:
 		excluded_rids.append((shooter as CollisionObject3D).get_rid())
 	query.exclude = excluded_rids
-	return space.intersect_ray(query)
+	return query
 
 func _resolve_impact(hit: Dictionary) -> void:
 	is_active = false
@@ -131,6 +136,9 @@ func _show_impact_flash() -> void:
 		impact_flash.visible = true
 	if impact_flash_mesh != null:
 		impact_flash_mesh.visible = true
+	if impact_particles != null:
+		impact_particles.restart()
+		impact_particles.emitting = true
 	if impact_flash_timer != null:
 		impact_flash_timer.start()
 	else:
