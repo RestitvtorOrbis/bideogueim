@@ -17,6 +17,7 @@ func _run() -> void:
 	root.add_child(district_a)
 	root.add_child(district_b)
 	await process_frame
+	_test_district_lighting(district_a)
 
 	_expect("same seed produces the same signature", district_a.get_generation_signature() == district_b.get_generation_signature())
 	_expect("city is substantially larger than the old district", district_a.get_city_size() > 400.0)
@@ -85,6 +86,30 @@ func _run() -> void:
 	district_b.queue_free()
 	await process_frame
 	_finish_city_test()
+
+
+func _test_district_lighting(district: Node) -> void:
+	var directional_lights: Array[DirectionalLight3D] = []
+	for child in district.get_children():
+		if child is DirectionalLight3D:
+			directional_lights.append(child as DirectionalLight3D)
+	var key: DirectionalLight3D
+	var fill: DirectionalLight3D
+	for light in directional_lights:
+		if light.shadow_enabled:
+			key = light
+		else:
+			fill = light
+	var light_contract_valid := directional_lights.size() == 2 and key != null and fill != null and key != fill and key.light_energy > fill.light_energy and absf(key.rotation_degrees.y - fill.rotation_degrees.y) >= 120.0
+	_expect("district has exactly one shadowed key and one opposing fill", light_contract_valid)
+	if key != null and fill != null:
+		_expect("district key and fill use the requested energies", is_equal_approx(key.light_energy, 0.68) and is_equal_approx(fill.light_energy, 0.24))
+		_expect("district key and fill keep the requested shadow policy", key.shadow_enabled and not fill.shadow_enabled)
+	var world_environment := district.get_node_or_null("WorldEnvironment") as WorldEnvironment
+	var environment := world_environment.environment if world_environment != null else null
+	_expect("district key color is restrained ivory", key != null and key.light_color == Color(1.0, 0.94, 0.78, 1.0))
+	_expect("district ambient color is restrained pale yellow", environment != null and environment.ambient_light_color == Color(0.64, 0.61, 0.47, 1.0))
+	_expect("district fog color is restrained pale yellow", environment != null and environment.fog_light_color == Color(0.34, 0.32, 0.25, 1.0))
 
 func _run_neon_only() -> void:
 	var district_a := preload("res://scenes/District.tscn").instantiate()

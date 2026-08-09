@@ -729,62 +729,9 @@ func _apply_palette_materials() -> void:
 
 
 func _configure_outfit() -> void:
+	# Imported Quaternius bodies already contain their textured clothing. Keep the
+	# inspection API and cleanup path, but do not add procedural box overlays.
 	_clear_outfit_nodes()
-	var model_pivot := _get_model_pivot()
-	if model_pivot == null or not is_instance_valid(_body_instance):
-		return
-	_outfit_root = Node3D.new()
-	_outfit_root.name = "SharedLowPolyOutfit"
-	model_pivot.add_child(_outfit_root)
-	var variant := CATALOG_SCRIPT.variant_index(_character_seed, 3, 29)
-	_outfit_detail_variant = maxi(0, variant)
-	var torso := _make_outfit_mesh(
-		"TorsoVestJacket",
-		"torso",
-		_get_outfit_material("torso"),
-		Vector3(0.56, 0.72, 0.34)
-	)
-	_outfit_torso_attachment = _add_outfit_node_to_bone_or_fallback(
-		torso,
-		[&"spine", &"Spine", &"chest", &"Chest", &"upper_body", &"spine_01"],
-		Vector3(0.0, _target_height * 0.54, 0.0),
-		Vector3.ZERO,
-		&"OutfitTorsoBoneAttachment"
-	)
-	_outfit_torso = torso
-
-	var detail: MeshInstance3D
-	var bone_aliases: Array[StringName]
-	var fallback_position := Vector3.ZERO
-	var bone_offset := Vector3.ZERO
-	match _outfit_detail_variant:
-		0:
-			_outfit_detail_name = &"cap"
-			detail = _make_outfit_mesh("DetailCap", "cap", _get_outfit_material("detail"), Vector3(0.46, 0.13, 0.40))
-			bone_aliases = [&"head", &"Head", &"head_end"]
-			fallback_position = Vector3(0.0, _target_height * 0.96, 0.0)
-			bone_offset = Vector3(0.0, 0.12, 0.0)
-		1:
-			_outfit_detail_name = &"glasses"
-			detail = _make_outfit_mesh("DetailGlasses", "glasses", _get_outfit_material("detail"), Vector3(0.38, 0.055, 0.035))
-			bone_aliases = [&"head", &"Head", &"neck"]
-			fallback_position = Vector3(0.0, _target_height * 0.83, -0.24)
-			bone_offset = Vector3(0.0, 0.02, -0.16)
-		_:
-			_outfit_detail_name = &"backpack"
-			detail = _make_outfit_mesh("DetailBackpack", "backpack", _get_outfit_material("detail"), Vector3(0.40, 0.48, 0.18))
-			bone_aliases = [&"spine", &"Spine", &"chest", &"Chest", &"upper_body"]
-			fallback_position = Vector3(0.0, _target_height * 0.56, 0.22)
-			bone_offset = Vector3(0.0, -0.10, 0.16)
-	_outfit_detail_attachment = _add_outfit_node_to_bone_or_fallback(
-		detail,
-		bone_aliases,
-		fallback_position,
-		bone_offset,
-		&"OutfitDetailBoneAttachment"
-	)
-	_outfit_detail = detail
-	_apply_visibility_tier()
 
 
 func _clear_outfit_nodes() -> void:
