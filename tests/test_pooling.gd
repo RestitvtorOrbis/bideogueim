@@ -32,6 +32,11 @@ func run() -> Array[Dictionary]:
 	_expect(results, "hostile checkout uses hostile palette", hostile_visual != null and hostile_visual.get_role() == &"hostile" and hostile_visual.get_palette_id() == &"hostile")
 	_expect(results, "hostile checkout has exclusive marker and prop", bool(hostile.get_node("RoleMarkerAnchor/WarningMarker").visible) and bool(hostile.get_node("RoleMarkerAnchor/HostileProp").visible))
 	_expect(results, "hostile visual height stays in hostile band", hostile_visual != null and (is_equal_approx(hostile_visual.get_target_height(), 1.78) or is_equal_approx(hostile_visual.get_target_height(), 1.86)))
+	if hostile_visual != null:
+		hostile_visual.set_motion_speed(3.4)
+		_expect(results, "hostile pool checkout selects UAL2 carry walking", hostile_visual.get_selected_animation_clip() == &"UAL2_Walk_Carry_Loop")
+		hostile_visual.set_motion_speed(5.0)
+		_expect(results, "hostile pool checkout selects jog running", hostile_visual.get_selected_animation_clip() == &"Jog_Fwd_Loop")
 	pool.release(hostile)
 	pool.queue_free()
 	return results

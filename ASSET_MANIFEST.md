@@ -97,4 +97,12 @@ assets/characters/quaternius/hairstyles/T_Hair_2_Normal.png
 - `animations/locomotion.glb` is a derived, compact GLB from `UAL1_Standard.glb`. The source library contained 43 animations; only `Idle_Loop`, `Walk_Loop`, and `Jog_Fwd_Loop` remain. The mannequin mesh, materials, embedded image, unused animation accessors, and unused animation data were removed. The result has no external URI dependencies.
 - The Standard male glTF references two unavailable exported texture names, `T_Eye_Normal_png.png` and `T_Hair_1_Normal_png.png`. The retained same-content alias files supply those exact references without modifying the vendor glTF JSON. Their bytes match `T_Eye_Normal.png` and `T_Hair_1_Normal.png`, respectively.
 - No ZIP archive, FBX, OBJ, Blend source, teen model, unused animation, scene integration, gameplay code, or product file was added.
+
+## T-062 - Universal Animation Library 2 Standard
+
+The user-supplied `Universal Animation Library 2[Standard].zip` has SHA-256 `4008EA208A604773A2B2177D965F0F5D3195498B5BF838C3F5785D68E95F2A68`. Its `License.txt` grants CC0 1.0 Universal / Public Domain Dedication and credits Quaternius.
+
+Only the non-root-motion Godot export `Unreal-Godot/UAL2_Standard.glb` is retained at `assets/characters/quaternius/animations/ual2_standard.glb` (8,091,444 bytes; SHA-256 `8CEE20AB1BC55130092447E810E26DF22DD2803ECCC54F52137A7D54D7AB88A8`). The archive contains 43 clips and a 65-joint skeleton matching both Standard body models. Godot imports loop suffixes away for this source, so the runtime maps `Walk_Carry` to the public `UAL2_Walk_Carry_Loop` name and `Zombie_Idle` to `UAL2_Zombie_Idle_Loop`.
+
+The runtime exposes and retains only those two UAL2 clips in its shared cache: armed hostile walking uses `UAL2_Walk_Carry_Loop`, hostile idle uses `UAL2_Zombie_Idle_Loop`, and civilian idle/walk continue to use the neutral retained clips. The retained vendor GLB still contains all 43 source clips, but unrelated actions are not added to the runtime library. UAL2 Standard has no normal run/jog clip; both roles therefore use the verified same-rig `Jog_Fwd_Loop` from the existing compact locomotion asset for running. The root-motion GLB variant is not retained.
 - Los 12 mapas JPG externos descargados en esta iteración están enumerados arriba con su página oficial, autor, licencia, tamaño y uso; el resto de geometría y shaders es original y procedural.

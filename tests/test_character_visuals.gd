@@ -8,6 +8,8 @@ const FEMALE_BODY_PATH := "res://assets/characters/quaternius/models/Superhero_F
 const MISSING_MODEL_PATH := "res://assets/characters/quaternius/models/does_not_exist.gltf"
 const MISSING_ACCESSORY_PATH := "res://assets/characters/quaternius/hairstyles/does_not_exist.gltf"
 const MISSING_LOCOMOTION_PATH := "res://assets/characters/quaternius/animations/does_not_exist.glb"
+const UAL2_SOURCE_PATH := "res://assets/characters/quaternius/animations/ual2_standard.glb"
+const MISSING_UAL2_PATH := "res://assets/characters/quaternius/animations/ual2_missing.glb"
 const AABB_TOLERANCE := 0.0001
 
 const BODY_FIXTURES := [
@@ -43,6 +45,7 @@ func run() -> Array[Dictionary]:
 	_test_hand_lookup_and_accessory_policy(results, visual_scene)
 	_test_locomotion_resources(results, visual_scene)
 	_test_locomotion_failure_statuses(results)
+	_test_ual2_locomotion(results, visual_scene)
 	return results
 
 
@@ -301,6 +304,79 @@ func _test_locomotion_failure_statuses(results: Array[Dictionary]) -> void:
 	var complete := HumanCharacterVisual.inspect_locomotion_source_tree(complete_fixture)
 	_expect(results, "complete in-memory locomotion source shares its exact three clips", int(complete.get("status", -1)) == HumanCharacterVisual.LOCOMOTION_STATUS_READY and complete.get("animations", {}).size() == 3)
 	complete_fixture.free()
+
+
+func _test_ual2_locomotion(results: Array[Dictionary], visual_scene: PackedScene) -> void:
+	var visual := _create_visual(visual_scene)
+	var expected_names: Array[StringName] = [&"UAL2_Walk_Carry_Loop", &"UAL2_Zombie_Idle_Loop"]
+	var first_animations: Dictionary = {}
+	for clip_name in expected_names:
+		var animation := visual.get_ual2_animation(clip_name)
+		first_animations[String(clip_name)] = animation
+		_expect(results, "UAL2 exposes %s" % String(clip_name), animation != null and animation.loop_mode != Animation.LOOP_NONE)
+	_expect(results, "UAL2 source is ready", visual.is_ual2_ready() and visual.get_ual2_load_status_name() == &"ready")
+	_expect(results, "UAL2 cache contains only selected clips", visual.get_ual2_animation_cache_size() == 2)
+	_expect(results, "UAL2 source is loaded once", visual.get_ual2_source_load_count() == 1)
+	var library := visual.get_ual2_animation_library()
+	_expect(results, "UAL2 exposes a shared animation library", library != null)
+	for index in 250:
+		var logical_visual := HumanCharacterVisual.new()
+		_expect(results, "logical UAL2 instance %d shares the library" % index, logical_visual.get_ual2_animation_library() == library)
+		for clip_name in expected_names:
+			_expect(results, "logical UAL2 instance %d shares %s" % [index, String(clip_name)], logical_visual.get_ual2_animation(clip_name) == first_animations[String(clip_name)])
+		logical_visual.free()
+	_expect(results, "UAL2 cache remains bounded after 250 instances", visual.get_ual2_animation_cache_size() == 2 and visual.get_ual2_source_load_count() == 1)
+	_expect(results, "unsupported UAL2 clip fails without changing cache", visual.get_ual2_animation(&"UAL2_Run_Loop") == null and visual.get_ual2_animation_cache_size() == 2)
+
+	var catalog := load(CATALOG_RESOURCE_PATH) as HumanCharacterCatalog
+	var configured := visual.configure_from_catalog(catalog, "ual2-hostile", &"hostile", 1.78)
+	_expect(results, "hostile UAL2 playback fixture configures", configured)
+	if configured:
+		var animation_player := visual.get_body_root().get_node_or_null("LocomotionAnimationPlayer") as AnimationPlayer
+		visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_NORMAL)
+		visual.set_motion_speed(3.4)
+		_expect(results, "normal tier applies motion speed immediately", visual.get_selected_animation_clip() == &"UAL2_Walk_Carry_Loop" and animation_player != null and animation_player.is_playing())
+		var throttled_clip := visual.get_selected_animation_clip()
+		var throttled_playback: StringName = &""
+		if animation_player != null:
+			throttled_playback = animation_player.current_animation
+		visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_THROTTLED)
+		visual.set_motion_speed(5.0)
+		_expect(results, "throttled tier defers motion clip changes", visual.get_selected_animation_clip() == throttled_clip and animation_player != null and animation_player.current_animation == throttled_playback and animation_player.is_playing())
+		visual.update_locomotion()
+		_expect(results, "throttled tier applies pending motion on explicit update", visual.get_selected_animation_clip() == &"Jog_Fwd_Loop" and animation_player != null and animation_player.is_playing())
+		visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_FROZEN)
+		_expect(results, "frozen tier stops on role idle", visual.get_selected_animation_clip() == &"UAL2_Zombie_Idle_Loop" and animation_player != null and not animation_player.is_playing())
+		visual.set_motion_speed(5.0)
+		_expect(results, "frozen tier keeps idle stopped while storing speed", visual.get_selected_animation_clip() == &"UAL2_Zombie_Idle_Loop" and is_equal_approx(visual.get_motion_speed(), 5.0) and animation_player != null and not animation_player.is_playing())
+		visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_NORMAL)
+		_expect(results, "normal tier resumes after frozen state", visual.get_selected_animation_clip() == &"Jog_Fwd_Loop" and animation_player != null and animation_player.is_playing())
+		visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_THROTTLED)
+		visual.set_motion_speed(3.4)
+		var pending_before_reconfigure := visual.get_motion_speed()
+		var reconfigured_from_throttled := visual.configure_from_catalog(catalog, "ual2-hostile-reconfigure", &"hostile", 1.78)
+		var reconfigured_player := visual.get_body_root().get_node_or_null("LocomotionAnimationPlayer") as AnimationPlayer
+		animation_player = reconfigured_player
+		_expect(results, "reconfigure clears pending throttled speed", reconfigured_from_throttled and is_equal_approx(pending_before_reconfigure, 3.4) and is_zero_approx(visual.get_motion_speed()) and visual.get_animation_tier() == HumanCharacterVisual.ANIMATION_TIER_NORMAL and visual.get_selected_animation_clip() == &"UAL2_Zombie_Idle_Loop" and reconfigured_player != null and reconfigured_player.is_playing())
+
+		visual.set_motion_speed(3.4)
+		_expect(results, "hostile walk selects UAL2 carry loop", visual.get_selected_animation_clip() == &"UAL2_Walk_Carry_Loop" and visual.get_selected_animation_library() == &"ual2")
+		visual.set_motion_speed(5.0)
+		_expect(results, "running selects the legacy jog loop", visual.get_selected_animation_clip() == &"Jog_Fwd_Loop" and visual.get_selected_animation_library() == &"")
+		visual.set_motion_speed(0.0)
+		_expect(results, "hostile idle selects the UAL2 hostile loop", visual.get_selected_animation_clip() == &"UAL2_Zombie_Idle_Loop" and visual.get_selected_animation_library() == &"ual2")
+		var before := visual.global_position
+		if animation_player != null:
+			animation_player.advance(0.25)
+		_expect(results, "locomotion animation does not move the gameplay visual root", visual.global_position.is_equal_approx(before))
+		visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_FROZEN)
+		_expect(results, "frozen tier stops on idle", animation_player != null and not animation_player.is_playing() and visual.get_selected_animation_clip() == &"UAL2_Zombie_Idle_Loop")
+		visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_NORMAL)
+		_expect(results, "normal tier resumes selected idle", animation_player != null and animation_player.is_playing())
+
+	var missing := HumanCharacterVisual.inspect_ual2_source_path(MISSING_UAL2_PATH)
+	_expect(results, "missing UAL2 source has a defined failure", int(missing.get("status", -1)) == HumanCharacterVisual.LOCOMOTION_STATUS_MISSING_SOURCE and missing.get("animations", {}).is_empty())
+	_dispose_visual(visual)
 
 
 func _create_locomotion_fixture(include_skeleton: bool, clip_names: Array[StringName]) -> Node3D:

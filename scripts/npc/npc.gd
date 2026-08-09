@@ -107,6 +107,9 @@ func activate(
 	if health != null:
 		health.configure(profile.maximum_health)
 	_apply_profile_visuals()
+	if human_visual != null:
+		human_visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_NORMAL)
+		human_visual.set_motion_speed(0.0)
 	if profile.is_hostile():
 		var hostile_service := _get_hostile_group_service()
 		if group_id == &"":
@@ -151,12 +154,15 @@ func deactivate() -> void:
 		navigation_agent.target_position = global_position
 	_reset_weapon_presentation()
 	if human_visual != null:
+		human_visual.set_motion_speed(0.0)
+		human_visual.set_animation_tier(HumanCharacterVisual.ANIMATION_TIER_FROZEN)
 		human_visual.set_visibility_tier(HumanCharacterVisual.VISIBILITY_TIER_HIDDEN)
 		human_visual.rotation = Vector3.ZERO
 
 func tick(delta: float, full_ai: bool) -> void:
 	if not active:
 		return
+	_update_visual_animation_state()
 	_civilian_target_cooldown = maxf(0.0, _civilian_target_cooldown - maxf(0.0, delta))
 	if profile != null and not profile.is_hostile() and state != State.INACTIVE and state != State.DISABLED and state != State.PANIC and state != State.FLEE and not _died:
 		_update_hostile_awareness(delta)
@@ -700,12 +706,19 @@ func _update_visual_orientation(delta: float) -> void:
 	if human_visual == null:
 		return
 	var horizontal_velocity := Vector3(velocity.x, 0.0, velocity.z)
+	human_visual.set_motion_speed(horizontal_velocity.length())
 	if horizontal_velocity.length_squared() <= 0.0001:
 		return
 	var direction := horizontal_velocity.normalized()
 	var target_yaw := atan2(-direction.x, -direction.z)
 	_visual_yaw = lerp_angle(_visual_yaw, target_yaw, clampf(maxf(0.0, delta) * VISUAL_YAW_RESPONSE, 0.0, 1.0))
 	human_visual.rotation.y = _visual_yaw
+
+
+func _update_visual_animation_state() -> void:
+	if human_visual == null:
+		return
+	human_visual.set_motion_speed(Vector3(velocity.x, 0.0, velocity.z).length())
 
 func _on_health_died() -> void:
 	if active and state != State.DISABLED:

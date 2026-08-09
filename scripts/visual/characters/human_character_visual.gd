@@ -14,11 +14,18 @@ const ANIMATION_TIER_FROZEN := 2
 
 const ACCESSORY_RENDER_POLICY := &"deferred_shared_skeleton"
 const LOCOMOTION_SOURCE_PATH := "res://assets/characters/quaternius/animations/locomotion.glb"
+const UAL2_SOURCE_PATH := "res://assets/characters/quaternius/animations/ual2_standard.glb"
 const LOCOMOTION_CLIP_NAMES: Array[StringName] = [
 	&"Idle_Loop",
 	&"Walk_Loop",
 	&"Jog_Fwd_Loop",
 ]
+const UAL2_CLIP_NAMES: Array[StringName] = [
+	&"UAL2_Walk_Carry_Loop",
+	&"UAL2_Zombie_Idle_Loop",
+]
+const IDLE_SPEED_THRESHOLD := 0.10
+const RUN_SPEED_THRESHOLD := 4.00
 
 const LOCOMOTION_STATUS_UNINITIALIZED := 0
 const LOCOMOTION_STATUS_READY := 1
@@ -60,6 +67,7 @@ const PALETTE_COLORS: Dictionary = {
 
 const PALETTE_CACHE_META_KEY := &"human_character_palette_material_cache"
 const LOCOMOTION_CACHE_META_KEY := &"human_character_locomotion_animation_cache"
+const UAL2_CACHE_META_KEY := &"human_character_ual2_animation_cache"
 
 @onready var _model_pivot: Node3D = $ModelPivot
 
@@ -84,6 +92,9 @@ var _selected_eyebrow_scene: PackedScene
 var _visibility_tier := VISIBILITY_TIER_FULL
 var _motion_speed := 0.0
 var _animation_tier := ANIMATION_TIER_NORMAL
+var _animation_player: AnimationPlayer
+var _selected_animation_clip: StringName = &""
+var _selected_animation_library: StringName = &""
 
 
 func configure_body(path: String, height: float, source_positive_z := true) -> bool:
@@ -129,6 +140,7 @@ func configure_body(path: String, height: float, source_positive_z := true) -> b
 	_normalized_aabb = _transform_aabb(source_aabb, model_pivot.transform)
 	_forward_vector = (model_pivot.basis * source_forward).normalized()
 	_apply_visibility_tier()
+	_setup_animation_playback()
 	return true
 
 
@@ -161,6 +173,7 @@ func configure_from_catalog(catalog: HumanCharacterCatalog, seed: Variant, role:
 	_select_accessory(catalog.hairstyle_paths, _hairstyle_variant_index, true)
 	_select_accessory(catalog.eyebrow_paths, _eyebrow_variant_index, false)
 	_apply_palette_materials()
+	_update_locomotion_playback()
 	return true
 
 
@@ -271,23 +284,8 @@ func get_visibility_tier() -> int:
 	return _visibility_tier
 
 
-func set_motion_speed(value: Variant) -> float:
-	var normalized := 0.0
-	if value is int or value is float:
-		var speed := float(value)
-		if speed == speed and speed != INF and speed != -INF:
-			normalized = maxf(0.0, speed)
-	_motion_speed = normalized
-	return _motion_speed
-
-
 func get_motion_speed() -> float:
 	return _motion_speed
-
-
-func set_animation_tier(value: Variant) -> int:
-	_animation_tier = _normalize_animation_tier(value)
-	return _animation_tier
 
 
 func get_animation_tier() -> int:
@@ -349,12 +347,157 @@ func get_locomotion_source_load_count() -> int:
 	return int(_get_locomotion_cache().get("load_count", 0))
 
 
+func get_ual2_animation(clip_name: StringName) -> Animation:
+	var normalized_name := _normalize_ual2_clip_name(clip_name)
+	if normalized_name.is_empty():
+		return null
+	var animations: Variant = _get_ual2_cache().get("animations", {})
+	return animations.get(String(normalized_name), null) as Animation if animations is Dictionary else null
+
+
+func get_ual2_animation_library() -> AnimationLibrary:
+	return _get_ual2_cache().get("library", null) as AnimationLibrary
+
+
+func get_ual2_load_status() -> int:
+	return int(_get_ual2_cache().get("status", LOCOMOTION_STATUS_UNINITIALIZED))
+
+
+func get_ual2_load_status_name() -> StringName:
+	return _locomotion_status_name(get_ual2_load_status())
+
+
+func is_ual2_ready() -> bool:
+	return get_ual2_load_status() == LOCOMOTION_STATUS_READY
+
+
+func get_ual2_animation_cache_size() -> int:
+	var animations: Variant = _get_ual2_cache().get("animations", {})
+	return animations.size() if animations is Dictionary else 0
+
+
+func get_ual2_source_load_count() -> int:
+	return int(_get_ual2_cache().get("load_count", 0))
+
+
+func get_selected_animation_clip() -> StringName:
+	return _selected_animation_clip
+
+
+func get_selected_animation_library() -> StringName:
+	return _selected_animation_library
+
+
+func set_motion_speed(value: Variant) -> float:
+	var normalized := 0.0
+	if value is int or value is float:
+		var speed := float(value)
+		if speed == speed and speed != INF and speed != -INF:
+			normalized = maxf(0.0, speed)
+	_motion_speed = normalized
+	if _animation_tier != ANIMATION_TIER_THROTTLED:
+		_update_locomotion_playback()
+	return _motion_speed
+
+
+func set_animation_tier(value: Variant) -> int:
+	_animation_tier = _normalize_animation_tier(value)
+	if _animation_tier != ANIMATION_TIER_THROTTLED:
+		_update_locomotion_playback()
+	return _animation_tier
+
+
+func set_animation_role(role: StringName) -> StringName:
+	_role = &"hostile" if String(role).to_lower() == "hostile" else &"civilian"
+	if _animation_tier != ANIMATION_TIER_THROTTLED:
+		_update_locomotion_playback()
+	return _role
+
+
+func update_locomotion() -> void:
+	_update_locomotion_playback()
+
+
+func _setup_animation_playback() -> void:
+	_animation_player = null
+	if not is_instance_valid(_body_instance):
+		return
+	var old_library := get_locomotion_animation_library()
+	var ual2_library := get_ual2_animation_library()
+	if old_library == null and ual2_library == null:
+		return
+	var player := AnimationPlayer.new()
+	player.name = "LocomotionAnimationPlayer"
+	_body_instance.add_child(player)
+	if old_library != null:
+		player.add_animation_library(&"", old_library)
+	if ual2_library != null:
+		player.add_animation_library(&"ual2", ual2_library)
+	_animation_player = player
+	_update_locomotion_playback(true)
+
+
+func _update_locomotion_playback(force_restart := false) -> void:
+	if not is_instance_valid(_animation_player):
+		_selected_animation_clip = &""
+		_selected_animation_library = &""
+		return
+	var desired_clip := _locomotion_clip_for_state(_motion_speed, _role)
+	var desired_library := &"ual2" if _is_ual2_clip(desired_clip) else &""
+	if _animation_tier == ANIMATION_TIER_FROZEN:
+		desired_clip = _idle_clip_for_role(_role)
+		desired_library = &"ual2" if _is_ual2_clip(desired_clip) else &""
+		_animation_player.stop()
+		_selected_animation_clip = desired_clip
+		_selected_animation_library = desired_library
+		return
+	var playback_name := String(desired_clip)
+	if desired_library != &"":
+		playback_name = "%s/%s" % [String(desired_library), String(desired_clip)]
+	var has_animation := get_ual2_animation(desired_clip) != null if desired_library != &"" else get_locomotion_animation(desired_clip) != null
+	if not has_animation:
+		if desired_library != &"":
+			desired_clip = _idle_clip_for_role(&"civilian")
+			desired_library = &""
+			playback_name = String(desired_clip)
+		has_animation = get_locomotion_animation(desired_clip) != null
+	if not has_animation:
+		_animation_player.stop()
+		_selected_animation_clip = &""
+		_selected_animation_library = &""
+		return
+	if force_restart or not _animation_player.is_playing() or _selected_animation_clip != desired_clip or _selected_animation_library != desired_library:
+		_animation_player.play(playback_name)
+	_selected_animation_clip = desired_clip
+	_selected_animation_library = desired_library
+
+
+func _locomotion_clip_for_state(speed: float, role: StringName) -> StringName:
+	if speed <= IDLE_SPEED_THRESHOLD:
+		return _idle_clip_for_role(role)
+	if speed >= RUN_SPEED_THRESHOLD:
+		return &"Jog_Fwd_Loop"
+	return &"UAL2_Walk_Carry_Loop" if String(role).to_lower() == "hostile" else &"Walk_Loop"
+
+
+func _idle_clip_for_role(role: StringName) -> StringName:
+	return &"UAL2_Zombie_Idle_Loop" if String(role).to_lower() == "hostile" and get_ual2_animation(&"UAL2_Zombie_Idle_Loop") != null else &"Idle_Loop"
+
+
+func _is_ual2_clip(clip_name: StringName) -> bool:
+	return UAL2_CLIP_NAMES.has(clip_name)
+
+
 static func inspect_locomotion_source_path(source_path: String) -> Dictionary:
 	return _load_locomotion_cache(source_path)
 
 
 static func inspect_locomotion_source_tree(source_root: Node) -> Dictionary:
 	return _extract_locomotion_resources(source_root, LOCOMOTION_SOURCE_PATH)
+
+
+static func inspect_ual2_source_path(source_path: String) -> Dictionary:
+	return _load_ual2_cache(source_path)
 
 
 func find_right_hand_bone() -> Variant:
@@ -384,6 +527,9 @@ func get_right_hand_bone_index() -> int:
 
 
 func _clear_body() -> void:
+	_animation_player = null
+	_selected_animation_clip = &""
+	_selected_animation_library = &""
 	if is_instance_valid(_body_instance):
 		_body_instance.free()
 	_body_instance = null
@@ -548,6 +694,85 @@ static func _get_locomotion_cache() -> Dictionary:
 	return cache
 
 
+static func _get_ual2_cache() -> Dictionary:
+	var main_loop := Engine.get_main_loop()
+	if main_loop == null:
+		return _new_locomotion_cache(UAL2_SOURCE_PATH, LOCOMOTION_STATUS_UNINITIALIZED)
+	var caches: Dictionary = {}
+	if main_loop.has_meta(UAL2_CACHE_META_KEY):
+		var cached_value: Variant = main_loop.get_meta(UAL2_CACHE_META_KEY)
+		if cached_value is Dictionary:
+			caches = cached_value
+	if caches.has(UAL2_SOURCE_PATH) and caches[UAL2_SOURCE_PATH] is Dictionary:
+		return caches[UAL2_SOURCE_PATH] as Dictionary
+	var cache := _load_ual2_cache(UAL2_SOURCE_PATH)
+	caches[UAL2_SOURCE_PATH] = cache
+	main_loop.set_meta(UAL2_CACHE_META_KEY, caches)
+	return cache
+
+
+static func _load_ual2_cache(source_path: String) -> Dictionary:
+	var cache := _new_locomotion_cache(source_path, LOCOMOTION_STATUS_UNINITIALIZED)
+	cache["load_count"] = 1
+	if source_path.is_empty() or not ResourceLoader.exists(source_path, "PackedScene"):
+		cache["status"] = LOCOMOTION_STATUS_MISSING_SOURCE
+		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_MISSING_SOURCE)
+		return cache
+	var packed_scene := ResourceLoader.load(source_path, "PackedScene") as PackedScene
+	if packed_scene == null:
+		cache["status"] = LOCOMOTION_STATUS_INVALID_SOURCE
+		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_INVALID_SOURCE)
+		return cache
+	var source_root := packed_scene.instantiate()
+	if source_root == null:
+		cache["status"] = LOCOMOTION_STATUS_INVALID_SOURCE
+		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_INVALID_SOURCE)
+		return cache
+	var animation_player := _find_animation_player(source_root)
+	if animation_player == null:
+		source_root.free()
+		cache["status"] = LOCOMOTION_STATUS_MISSING_LIBRARY
+		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_MISSING_LIBRARY)
+		return cache
+	if _find_skeleton_in_tree(source_root) == null:
+		source_root.free()
+		cache["status"] = LOCOMOTION_STATUS_MISSING_SKELETON
+		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_MISSING_SKELETON)
+		return cache
+	var aliases := {
+		&"UAL2_Walk_Carry_Loop": [&"Walk_Carry", &"Walk_Carry_Loop"],
+		&"UAL2_Zombie_Idle_Loop": [&"Zombie_Idle", &"Zombie_Idle_Loop"],
+	}
+	var selected: Dictionary = {}
+	var library := AnimationLibrary.new()
+	for public_name in UAL2_CLIP_NAMES:
+		var animation: Animation
+		for library_name in animation_player.get_animation_library_list():
+			var source_library := animation_player.get_animation_library(StringName(library_name))
+			if source_library == null:
+				continue
+			for raw_name in aliases[public_name]:
+				if source_library.has_animation(raw_name):
+					animation = source_library.get_animation(raw_name)
+					break
+			if animation != null:
+				break
+		if animation == null:
+			source_root.free()
+			cache["status"] = LOCOMOTION_STATUS_MISSING_CLIP
+			cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_MISSING_CLIP)
+			return cache
+		selected[String(public_name)] = animation
+		library.add_animation(public_name, animation)
+	source_root.free()
+	cache["status"] = LOCOMOTION_STATUS_READY
+	cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_READY)
+	cache["library"] = library
+	cache["library_name"] = &"ual2"
+	cache["animations"] = selected
+	return cache
+
+
 static func _load_locomotion_cache(source_path: String) -> Dictionary:
 	var cache := _new_locomotion_cache(source_path, LOCOMOTION_STATUS_UNINITIALIZED)
 	cache["load_count"] = 1
@@ -566,7 +791,7 @@ static func _load_locomotion_cache(source_path: String) -> Dictionary:
 		cache["status"] = LOCOMOTION_STATUS_INVALID_SOURCE
 		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_INVALID_SOURCE)
 		return cache
-	cache = _extract_locomotion_resources(source_root, source_path)
+	cache = _extract_locomotion_resources(source_root, source_path, false)
 	source_root.free()
 	cache["load_count"] = 1
 	return cache
@@ -584,7 +809,7 @@ static func _new_locomotion_cache(source_path: String, status: int) -> Dictionar
 	}
 
 
-static func _extract_locomotion_resources(source_root: Node, source_path: String) -> Dictionary:
+static func _extract_locomotion_resources(source_root: Node, source_path: String, require_skeleton := true) -> Dictionary:
 	var cache := _new_locomotion_cache(source_path, LOCOMOTION_STATUS_UNINITIALIZED)
 	if source_root == null:
 		cache["status"] = LOCOMOTION_STATUS_INVALID_SOURCE
@@ -597,7 +822,7 @@ static func _extract_locomotion_resources(source_root: Node, source_path: String
 		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_MISSING_LIBRARY)
 		return cache
 	var skeleton := _find_skeleton_in_tree(source_root)
-	if skeleton == null:
+	if require_skeleton and skeleton == null:
 		cache["status"] = LOCOMOTION_STATUS_MISSING_SKELETON
 		cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_MISSING_SKELETON)
 		return cache
@@ -632,10 +857,38 @@ static func _extract_locomotion_resources(source_root: Node, source_path: String
 		return cache
 	cache["status"] = LOCOMOTION_STATUS_READY
 	cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_READY)
-	cache["library"] = matched_library
+	var canonical_library := AnimationLibrary.new()
+	for clip_name in LOCOMOTION_CLIP_NAMES:
+		var animation: Animation = matches.get(String(clip_name), null) as Animation
+		if animation == null:
+			cache["status"] = LOCOMOTION_STATUS_MISSING_CLIP
+			cache["status_name"] = _locomotion_status_name(LOCOMOTION_STATUS_MISSING_CLIP)
+			return cache
+		var retargeted_animation := _retarget_legacy_animation(animation)
+		canonical_library.add_animation(clip_name, retargeted_animation)
+		matches[String(clip_name)] = retargeted_animation
+	cache["library"] = canonical_library
 	cache["library_name"] = matched_library_name
 	cache["animations"] = matches
 	return cache
+
+
+static func _retarget_legacy_animation(source: Animation) -> Animation:
+	if source == null:
+		return null
+	var retargeted := source.duplicate() as Animation
+	for track_index in retargeted.get_track_count():
+		var source_path := String(retargeted.track_get_path(track_index))
+		if source_path.contains(":"):
+			continue
+		var segments := source_path.split("/")
+		if segments.is_empty():
+			continue
+		var bone_name := String(segments[segments.size() - 1])
+		if bone_name.is_empty():
+			continue
+		retargeted.track_set_path(track_index, NodePath("Armature/Skeleton3D:%s" % bone_name))
+	return retargeted
 
 
 static func _find_animation_player(node: Node) -> AnimationPlayer:
@@ -667,9 +920,29 @@ static func _normalize_locomotion_clip_name(value: StringName) -> StringName:
 	var slash_index := text.rfind("/")
 	if slash_index >= 0:
 		text = text.substr(slash_index + 1)
+	match text:
+		"Idle", "Idle_Loop":
+			return &"Idle_Loop"
+		"Walk", "Walk_Loop":
+			return &"Walk_Loop"
+		"Jog_Fwd", "Jog_Fwd_Loop":
+			return &"Jog_Fwd_Loop"
 	for clip_name in LOCOMOTION_CLIP_NAMES:
 		if text == String(clip_name):
 			return clip_name
+	return &""
+
+
+static func _normalize_ual2_clip_name(value: StringName) -> StringName:
+	var text := String(value)
+	var slash_index := text.rfind("/")
+	if slash_index >= 0:
+		text = text.substr(slash_index + 1)
+	match text:
+		"Walk_Carry", "Walk_Carry_Loop", "UAL2_Walk_Carry_Loop":
+			return &"UAL2_Walk_Carry_Loop"
+		"Zombie_Idle", "Zombie_Idle_Loop", "UAL2_Zombie_Idle_Loop":
+			return &"UAL2_Zombie_Idle_Loop"
 	return &""
 
 
