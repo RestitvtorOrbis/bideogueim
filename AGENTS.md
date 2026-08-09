@@ -4,6 +4,7 @@
 
 This repository is in beta.
 
+- For the PoC, run only the minimum validation necessary to establish a Minimum Viable Product. Record deeper, broader, or regression-focused testing as separate open tickets to be addressed when the project matures.
 - Use only one coordinated agent round to investigate and correct each distinct bug.
 - Treat all investigation, advisory consultation, implementation, and verification for that bug as part of the same round. Do not start a second agent round after it closes.
 - During the round, reproduce the issue, collect evidence, identify the likely root cause, and make only an evidence-backed correction.
@@ -31,6 +32,8 @@ This repository is in beta.
 - A ticket is not considered closed until its dedicated commit succeeds. Do not bundle multiple closed tickets into one commit or spread one ticket across multiple commits.
 - If validation fails, leave the ticket open and document the failure. Create a narrowly scoped follow-up ticket when additional implementation is required; do not silently expand the original ticket.
 - Use the orchestrator workflow for new implementations that require significant definition and reasoning. Do not use it for simple changes limited to a single file, small refactorings, or pushing changes to the repository; handle those directly.
+- Never run any subagent in fast mode. Use the model and reasoning effort required by the applicable workflow, ticket, or skill.
 - For Sol-Luna work, Sol owns planning and acceptance. Each implementation ticket is assigned to one GPT-5.6 Luna agent with `reasoning_effort: xhigh` unless its recorded dependency and ownership boundaries explicitly permit parallel execution.
+- When passively waiting for Luna subagents to finish, use infrequent polling intervals because their work can take substantial time; avoid tight polling loops.
 - Instructions given to Luna subagents must be detailed, self-contained, and consistent with the assigned ticket. They must restate the relevant context and evidence, ownership boundary, non-goals, constraints, dependencies, affected files or systems, acceptance criteria, required tests and validation commands, and the expected handoff contents. Do not delegate with a terse summary or leave material implementation decisions implicit.
 - Launch GPT-5.6 Luna subagents through `multi_agent_v1` (the app-backed task creation path) with `reasoning_effort: xhigh`; do not use the generic collaboration `spawn_agent` path for Luna, because that path does not expose the Luna model in this workspace.
