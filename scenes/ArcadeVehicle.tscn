@@ -20,7 +20,8 @@ position = Vector3(0, 0.55, 0)
 shape = SubResource("VehicleShape")
 
 [node name="IgnitionLabsCar" type="MeshInstance3D" parent="."]
-position = Vector3(0.176, 0.0, 0.243)
+position = Vector3(-0.176, 0.0, -0.243)
+rotation_degrees = Vector3(0, 180, 0)
 scale = Vector3(0.009, 0.009, 0.009)
 mesh = ExtResource("5_vehicle_model")
 

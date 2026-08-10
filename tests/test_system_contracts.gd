@@ -217,7 +217,8 @@ func _test_world_and_vehicle(results: Array[Dictionary]) -> void:
 				body_material = candidate
 	_expect(results, "imported vehicle body material is opaque", body_material != null and body_material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED and body_material.albedo_color.a >= 0.99)
 	_expect(results, "imported vehicle glass remains transparent", glass_material != null and glass_material.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED and glass_material.albedo_color.a < 0.99)
-	_expect(results, "imported vehicle model keeps the accepted scale and offset", imported_model != null and imported_model.scale == Vector3(0.009, 0.009, 0.009) and imported_model.position == Vector3(0.176, 0.0, 0.243))
+	var imported_model_yaw_delta := absf(wrapf(imported_model.rotation.y - PI, -PI, PI)) if imported_model != null else TAU
+	_expect(results, "imported vehicle model keeps the corrected scale, offset, and orientation", imported_model != null and imported_model.scale == Vector3(0.009, 0.009, 0.009) and imported_model.position == Vector3(-0.176, 0.0, -0.243) and is_zero_approx(imported_model_yaw_delta) and is_zero_approx(imported_model.rotation.x) and is_zero_approx(imported_model.rotation.z))
 	var primitive_visual_names := ["BodyMesh", "CabinMesh", "Hood", "Roof", "AccentStrip", "Headlights", "RearLights", "WheelVisualFrontLeft", "WheelVisualFrontRight", "WheelVisualRearLeft", "WheelVisualRearRight", "HubVisualFrontLeft", "HubVisualFrontRight", "HubVisualRearLeft", "HubVisualRearRight"]
 	var primitive_visuals_absent := true
 	for primitive_name in primitive_visual_names:
