@@ -207,10 +207,16 @@ func _test_neon_contract(district_a: Node, district_b: Node) -> void:
 	var colors_a: Array = neon_a.get_meta("fixture_colors", []) if neon_a != null else []
 	var colors_b: Array = neon_b.get_meta("fixture_colors", []) if neon_b != null else []
 	var fixture_buildings: Array = neon_a.get_meta("fixture_buildings", []) if neon_a != null else []
+	var ad_copy_a: Array = neon_a.get_meta("ad_copy", []) if neon_a != null else []
+	var ad_copy_b: Array = neon_b.get_meta("ad_copy", []) if neon_b != null else []
+	var ad_positions_a: Array = neon_a.get_meta("ad_positions", []) if neon_a != null else []
+	var ad_positions_b: Array = neon_b.get_meta("ad_positions", []) if neon_b != null else []
 	var lights: Array[Node] = neon_a.find_children("*", "OmniLight3D", true, false) if neon_a != null else []
 	var signs: Array[Node] = neon_a.find_children("*", "MultiMeshInstance3D", true, false) if neon_a != null else []
-	_expect("building neon root exposes exactly eight fixtures", neon_a != null and district_a.get_neon_fixture_count() == 8 and int(neon_a.get_meta("fixture_count", 0)) == 8)
-	_expect("building neons are deterministic for equal seeds", _arrays_match(positions_a, positions_b) and _arrays_match(sign_positions, sign_positions_b) and _arrays_match(colors_a, colors_b))
+	var ads: Array[Node] = neon_a.find_children("*", "Label3D", true, false) if neon_a != null else []
+	var expected_ad_copy: Array = ["NOVA", "ARCADE", "24H", "RAMEN", "CLUB", "BYTE", "NOVA", "ARCADE", "24H", "RAMEN", "CLUB", "BYTE"]
+	_expect("building neon root exposes exactly twelve fixtures", neon_a != null and district_a.get_neon_fixture_count() == 12 and int(neon_a.get_meta("fixture_count", 0)) == 12)
+	_expect("building neons are deterministic for equal seeds", _arrays_match(positions_a, positions_b) and _arrays_match(sign_positions, sign_positions_b) and _arrays_match(colors_a, colors_b) and _arrays_match(ad_copy_a, ad_copy_b) and _arrays_match(ad_positions_a, ad_positions_b))
 	_expect("building neons span the map", _neon_spans_map(positions_a, district_a.get_city_size()))
 	var sign_count := 0
 	var emissive_signs := true
@@ -224,18 +230,28 @@ func _test_neon_contract(district_a: Node, district_b: Node) -> void:
 		var material := sign_mesh.material as StandardMaterial3D if sign_mesh != null else null
 		if material == null or not material.emission_enabled or material.emission_energy_multiplier < 5.0:
 			emissive_signs = false
-	_expect("every neon fixture has visible emissive sign geometry", sign_count == 8 and emissive_signs and signs.size() == 3)
-	var lights_valid := lights.size() == 8
+	_expect("every neon fixture has visible emissive sign geometry", sign_count == 12 and emissive_signs and signs.size() == 3)
+	var ads_valid := ads.size() == 12 and ad_copy_a == expected_ad_copy and ad_positions_a.size() == 12
+	for index in range(ads.size()):
+		var ad := ads[index] as Label3D
+		if ad == null or index >= colors_a.size():
+			ads_valid = false
+			continue
+		var expected_color := Color(colors_a[index].r * 2.0, colors_a[index].g * 2.0, colors_a[index].b * 2.0, 1.0)
+		if ad.name != "Ad%02d" % index or ad.text != expected_ad_copy[index] or ad.font_size != 72 or not is_equal_approx(ad.pixel_size, 0.009) or ad.outline_size != 10 or ad.outline_modulate != Color(0.0, 0.0, 0.0, 0.98) or ad.modulate != expected_color or not ad.double_sided or ad.no_depth_test:
+			ads_valid = false
+	_expect("neon fixtures have deterministic readable advertising labels", ads_valid)
+	var lights_valid := lights.size() == 12
 	for light_node in lights:
 		var light := light_node as OmniLight3D
-		if light == null or light.light_energy < 5.0 or light.omni_range < 16.0 or light.omni_range > 24.0 or light.shadow_enabled:
+		if light == null or not is_equal_approx(light.light_energy, 9.0) or not is_equal_approx(light.omni_range, 280.0) or not is_equal_approx(light.omni_attenuation, 1.0) or light.shadow_enabled:
 			lights_valid = false
 			continue
 		var fixture_index := int(light.get_meta("fixture_index", -1))
 		if fixture_index < 0 or fixture_index >= colors_a.size() or light.light_color != colors_a[fixture_index]:
 			lights_valid = false
-	_expect("neon signs have matching bounded OmniLights", lights_valid)
-	var outside_buildings := sign_positions.size() == 8 and positions_a.size() == 8 and fixture_buildings.size() == 8
+	_expect("neon signs have matching long-range OmniLights", lights_valid)
+	var outside_buildings := sign_positions.size() == 12 and positions_a.size() == 12 and fixture_buildings.size() == 12
 	for index in range(mini(sign_positions.size(), fixture_buildings.size())):
 		var building: Dictionary = fixture_buildings[index]
 		var building_position: Vector3 = building["position"]
@@ -246,7 +262,20 @@ func _test_neon_contract(district_a: Node, district_b: Node) -> void:
 		if not exterior_sign or not exterior_light:
 			outside_buildings = false
 	_expect("neon signs and lights stay outside building volumes", outside_buildings)
-	_expect("neon node root stays compact", neon_a != null and _count_nodes(neon_a) <= 12)
+	_expect("neon node root stays compact", neon_a != null and _count_nodes(neon_a) <= 28)
+
+	var street_lights_a := district_a.get_node_or_null("StreetFurniture/StreetLampLights") as Node3D
+	var street_lights_b := district_b.get_node_or_null("StreetFurniture/StreetLampLights") as Node3D
+	var street_light_nodes: Array[Node] = street_lights_a.find_children("*", "OmniLight3D", true, false) if street_lights_a != null else []
+	var lamp_indices_a: Array = street_lights_a.get_meta("lamp_indices", []) if street_lights_a != null else []
+	var lamp_indices_b: Array = street_lights_b.get_meta("lamp_indices", []) if street_lights_b != null else []
+	var street_lights_valid := street_lights_a != null and street_light_nodes.size() == 72 and lamp_indices_a.size() == 72
+	for light_node in street_light_nodes:
+		var light := light_node as OmniLight3D
+		if light == null or light.light_color != Color("#ffb35c") or not is_equal_approx(light.light_energy, 3.8) or not is_equal_approx(light.omni_range, 34.0) or light.shadow_enabled:
+			street_lights_valid = false
+	_expect("district constructs exactly 72 bright amber street lights", street_lights_valid)
+	_expect("street light selection is deterministic for equal seeds", _arrays_match(lamp_indices_a, lamp_indices_b))
 
 func _test_perimeter_contract(district_a: Node, district_b: Node) -> void:
 	var modules_a: Array[Dictionary] = district_a.get_perimeter_modules()
@@ -360,16 +389,20 @@ func _arrays_match(left: Array, right: Array) -> bool:
 	return true
 
 func _neon_spans_map(positions: Array, city_size: float) -> bool:
-	if positions.size() != 8:
+	if positions.size() != 12:
 		return false
 	var half_extent := city_size * 0.5
 	var x_bins := {}
 	var z_bins := {}
+	var bins := {}
 	for position in positions:
 		var world_position: Vector3 = position
 		x_bins[clampi(int(floor((world_position.x + half_extent) / city_size * 4.0)), 0, 3)] = true
-		z_bins[clampi(int(floor((world_position.z + half_extent) / city_size * 2.0)), 0, 1)] = true
-	return x_bins.size() == 4 and z_bins.size() == 2
+		var z_bin := clampi(int(floor((world_position.z + half_extent) / city_size * 3.0)), 0, 2)
+		var x_bin := clampi(int(floor((world_position.x + half_extent) / city_size * 4.0)), 0, 3)
+		z_bins[z_bin] = true
+		bins["%d:%d" % [x_bin, z_bin]] = true
+	return x_bins.size() == 4 and z_bins.size() == 3 and bins.size() == 12
 
 func _expect(name: String, passed: bool) -> void:
 	_results.append({"name": name, "passed": passed})

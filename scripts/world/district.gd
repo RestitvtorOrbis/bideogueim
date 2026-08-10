@@ -10,14 +10,15 @@ extends Node3D
 @export_range(4, 128, 1) var civilian_spawn_count: int = 48
 @export_range(4, 128, 1) var hostile_spawn_count: int = 32
 
-const NEON_FIXTURE_COUNT := 8
+const NEON_FIXTURE_COUNT := 12
 const NEON_BIN_COLUMNS := 4
-const NEON_BIN_ROWS := 2
+const NEON_BIN_ROWS := 3
 const NEON_LIGHT_RANGE := 280.0
 const NEON_LIGHT_ENERGY := 9.0
-const STREET_LAMP_LIGHT_COUNT := 48
-const STREET_LAMP_LIGHT_RANGE := 30.0
-const STREET_LAMP_LIGHT_ENERGY := 3.2
+const NEON_AD_COPY := ["NOVA", "ARCADE", "24H", "RAMEN", "CLUB", "BYTE"]
+const STREET_LAMP_LIGHT_COUNT := 72
+const STREET_LAMP_LIGHT_RANGE := 34.0
+const STREET_LAMP_LIGHT_ENERGY := 3.8
 const STREET_LAMP_LIGHT_COLOR := Color("#ffb35c")
 
 var _layout: Dictionary = {}
@@ -424,6 +425,8 @@ func _build_building_neons() -> void:
 	var fixture_colors: Array[Color] = []
 	var fixture_building_indices: Array[int] = []
 	var fixture_buildings: Array[Dictionary] = []
+	var ad_copy: Array[String] = []
+	var ad_positions: Array[Vector3] = []
 	var selected := _select_neon_buildings()
 
 	for fixture_index in range(selected.size()):
@@ -441,6 +444,23 @@ func _build_building_neons() -> void:
 		fixture_colors.append(palette[palette_index])
 		fixture_building_indices.append(int(selected_entry["index"]))
 		fixture_buildings.append(building)
+
+		var ad := Label3D.new()
+		ad.name = "Ad%02d" % fixture_index
+		ad.text = NEON_AD_COPY[fixture_index % NEON_AD_COPY.size()]
+		ad.position = facade["ad_position"]
+		ad.rotation = Vector3(0.0, float(facade["ad_yaw"]), 0.0)
+		ad.font_size = 72
+		ad.pixel_size = 0.009
+		ad.outline_size = 10
+		ad.outline_modulate = Color(0.0, 0.0, 0.0, 0.98)
+		ad.modulate = Color(palette[palette_index].r * 2.0, palette[palette_index].g * 2.0, palette[palette_index].b * 2.0, 1.0)
+		ad.double_sided = true
+		ad.no_depth_test = false
+		ad.set_meta("fixture_index", fixture_index)
+		neon_root.add_child(ad)
+		ad_copy.append(ad.text)
+		ad_positions.append(ad.position)
 
 		var light := OmniLight3D.new()
 		light.name = "OmniLight%02d" % fixture_index
@@ -473,6 +493,8 @@ func _build_building_neons() -> void:
 	neon_root.set_meta("fixture_colors", fixture_colors)
 	neon_root.set_meta("fixture_building_indices", fixture_building_indices)
 	neon_root.set_meta("fixture_buildings", fixture_buildings)
+	neon_root.set_meta("ad_copy", ad_copy)
+	neon_root.set_meta("ad_positions", ad_positions)
 	set_meta("neon_fixture_count", selected.size())
 
 func _select_neon_buildings() -> Array[Dictionary]:
@@ -568,6 +590,8 @@ func _make_neon_facade(building: Dictionary) -> Dictionary:
 	var local_y := sign_world_y - position.y
 	var sign_local_position := Vector3(0.0, local_y, 0.0) + local_normal * (normal_extent + 0.20)
 	var sign_position := position + yaw_basis * sign_local_position
+	var facade_normal := yaw_basis * local_normal
+	var ad_position := sign_position + facade_normal * 0.08
 	var sign_width := clampf(facade_span * 0.52, 2.5, maxf(2.5, facade_span - 1.0))
 	var sign_height := clampf(height * 0.075, 0.65, 1.25)
 	var sign_basis := yaw_basis * Basis(Vector3.UP, sign_rotation)
@@ -579,6 +603,8 @@ func _make_neon_facade(building: Dictionary) -> Dictionary:
 	return {
 		"sign_transform": sign_transform,
 		"light_position": light_position,
+		"ad_position": ad_position,
+		"ad_yaw": atan2(facade_normal.x, facade_normal.z),
 	}
 
 func _nearest_road_center(value: float) -> float:

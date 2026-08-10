@@ -848,7 +848,8 @@ func _apply_profile_visuals() -> void:
 	if warning_marker != null:
 		warning_marker.visible = profile.warning_marker_enabled
 	if warning_marker != null and warning_marker.visible:
-		warning_marker.modulate = profile.warning_marker_color
+		var marker_color := profile.warning_marker_color
+		warning_marker.modulate = Color(marker_color.r * 2.0, marker_color.g * 2.0, marker_color.b * 2.0, marker_color.a)
 	if armed_prop != null:
 		armed_prop.visible = hostile and profile.equipped_prop_scene != null
 

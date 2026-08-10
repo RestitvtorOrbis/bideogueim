@@ -16,6 +16,8 @@ func run() -> Array[Dictionary]:
 	_expect(results, "civilian checkout suppresses primitive body kit", not bool(first.get_node("BodyMesh").visible) and not bool(first.get_node("Jacket").visible) and not bool(first.get_node("Head").visible))
 	var civilian_shape := first.get_node("CollisionShape3D").shape as CapsuleShape3D
 	_expect(results, "NPC gameplay capsule is 1.75m by 0.35m", civilian_shape != null and is_equal_approx(civilian_shape.height, 1.75) and is_equal_approx(civilian_shape.radius, 0.35) and is_equal_approx(first.get_node("CollisionShape3D").position.y, 0.875))
+	var civilian_marker := first.get_node_or_null("RoleMarkerAnchor/WarningMarker") as Label3D
+	_expect(results, "civilian marker is enabled, blue, and HDR-readable", _marker_matches_profile(civilian_marker, profile.warning_marker_color))
 	first.set("velocity", Vector3.RIGHT)
 	first.call("_update_visual_orientation", 1.0)
 	_expect(results, "NPC visual yaw follows horizontal movement", civilian_visual != null and is_zero_approx(wrapf(civilian_visual.rotation.y + PI * 0.5, -PI, PI)))
@@ -30,6 +32,8 @@ func run() -> Array[Dictionary]:
 	var hostile_visual := hostile.get_node_or_null("Visuals/HumanCharacterVisual") as HumanCharacterVisual
 	_expect(results, "hostile checkout reuses the pooled NPC", hostile == second)
 	_expect(results, "hostile checkout uses hostile palette", hostile_visual != null and hostile_visual.get_role() == &"hostile" and hostile_visual.get_palette_id() == &"hostile")
+	var hostile_marker := hostile.get_node_or_null("RoleMarkerAnchor/WarningMarker") as Label3D
+	_expect(results, "hostile marker is enabled, red, and HDR-readable", _marker_matches_profile(hostile_marker, hostile_profile.warning_marker_color))
 	_expect(results, "hostile checkout has exclusive marker and prop", bool(hostile.get_node("RoleMarkerAnchor/WarningMarker").visible) and bool(hostile.get_node("RoleMarkerAnchor/HostileProp").visible))
 	_expect(results, "hostile visual height stays in hostile band", hostile_visual != null and (is_equal_approx(hostile_visual.get_target_height(), 1.78) or is_equal_approx(hostile_visual.get_target_height(), 1.86)))
 	if hostile_visual != null:
@@ -40,6 +44,12 @@ func run() -> Array[Dictionary]:
 	pool.release(hostile)
 	pool.queue_free()
 	return results
+
+func _marker_matches_profile(marker: Label3D, profile_color: Color) -> bool:
+	if marker == null:
+		return false
+	var expected_color := Color(profile_color.r * 2.0, profile_color.g * 2.0, profile_color.b * 2.0, profile_color.a)
+	return marker.visible and marker.modulate == expected_color and marker.font_size == 88 and is_equal_approx(marker.pixel_size, 0.006) and marker.outline_size == 18 and marker.outline_modulate.r == 0.0 and marker.outline_modulate.g == 0.0 and marker.outline_modulate.b == 0.0 and marker.outline_modulate.a >= 0.95 and int(marker.billboard) == 1 and marker.no_depth_test
 
 func _expect(results: Array[Dictionary], name: String, condition: bool) -> void:
 	results.append({"name": name, "passed": condition, "message": "" if condition else "Assertion failed"})

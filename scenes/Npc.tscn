@@ -123,8 +123,10 @@ position = Vector3(0, 2.1, 0)
 
 [node name="WarningMarker" type="Label3D" parent="RoleMarkerAnchor"]
 text = "!"
-font_size = 64
-outline_size = 12
+font_size = 88
+pixel_size = 0.006
+outline_size = 18
+outline_modulate = Color(0, 0, 0, 0.98)
 modulate = Color(1, 0.1, 0.04, 1)
 billboard = 1
 no_depth_test = true
